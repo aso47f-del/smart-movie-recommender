@@ -48,7 +48,8 @@ st.markdown("""
 try:
     API_KEY = st.secrets["TMDB_API_KEY"]
 except Exception:
-    API_KEY = "9aeb1cb20dd00ae87552c5893e65b0a9"
+    st.error("Please configure TMDB_API_KEY in secrets.")
+    st.stop()
 
 NO_IMAGE_URL = "https://via.placeholder.com/500x750?text=No+Poster+Available"
 
