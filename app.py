@@ -216,12 +216,18 @@ if st.button("Get Recommendations 🚀", type="primary") and selected_movie_id:
         st.session_state.recommendations = get_recommendations_from_tmdb(selected_movie_id, selected_genre)
 
 if st.session_state.recommendations:
-    results = st.session_state.recommendations[:num_recommendations]
+    results = st.session_state.recommendations.copy()
     
-    if sort_option == "Highest Rating":
+    # الترتيب أولاً بناءً على اختيار المستخدم بشكل تنازلي (من الأكبر للأصغر)
+    if sort_option == "Popularity / Match":
+        results = sorted(results, key=lambda x: x['match'], reverse=True)
+    elif sort_option == "Highest Rating":
         results = sorted(results, key=lambda x: x['rating'], reverse=True)
     elif sort_option == "Release Year (Newest)":
         results = sorted(results, key=lambda x: x['year'], reverse=True)
+        
+    # ثم أخذ العدد الذي حدده المستخدم من القائمة المرتبة
+    results = results[:num_recommendations]
 
     COLS_PER_ROW = 5
     for row_start in range(0, len(results), COLS_PER_ROW):
