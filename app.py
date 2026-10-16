@@ -221,16 +221,26 @@ st.caption("Now powered by live TMDB API — updated daily with new releases and
 
 search_query = st.text_input("Search for any movie globally:", "Obsession")
 
+search_query = st.text_input("Search for any movie globally:", "Obsession")
+
 selected_movie_id = None
 if search_query:
     search_results = search_movie_tmdb(search_query)
     if search_results:
-        movie_titles = [m.get("title") for m in search_results]
-        movie_dict_map = {m.get("title"): m.get("id") for m in search_results}
+        # إنشاء قائمة تعرض اسم الفيلم مع سنة الإصدار لسهولة التمييز (مثال: Obsession (2024))
+        movie_options = []
+        movie_dict_map = {}
         
-        chosen_title = st.selectbox("Select from search results:", movie_titles)
-        selected_movie_id = movie_dict_map.get(chosen_title)
-        st.session_state.selected_movie_title = chosen_title
+        for m in search_results:
+            title = m.get("title", "Unknown")
+            year = m.get("release_date", "N/A")[:4]
+            display_name = f"{title} ({year})" if year and year != "N/A" else title
+            
+            movie_options.append(display_name)
+            movie_dict_map[display_name] = m.get("id")
+        
+        chosen_option = st.selectbox("Select from search results:", movie_options)
+        selected_movie_id = movie_dict_map.get(chosen_option)
         st.session_state.selected_movie_id = selected_movie_id
 
 if "recommendations" not in st.session_state:
