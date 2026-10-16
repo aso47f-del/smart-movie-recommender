@@ -3,7 +3,7 @@ import requests
 
 # 1. إعدادات الصفحة
 st.set_page_config(
-    page_title="Smart Live Movie & Franchise Recommender",
+    page_title="Smart Live Movie & Franchise Hub",
     page_icon="🎬",
     layout="wide"
 )
@@ -37,6 +37,12 @@ st.markdown("""
     }
     .movie-rating { color: #ffb703; }
     .movie-match { color: #2ec4b6; }
+    .cast-name {
+        font-size: 0.8rem;
+        text-align: center;
+        font-weight: 600;
+        margin-top: 4px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -80,7 +86,6 @@ def search_movie_tmdb(query):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_collection_tmdb(query):
-    """البحث عن سلاسل الأفلام (Collections/Franchises)"""
     url = f"https://api.themoviedb.org/3/search/collection?api_key={API_KEY}&query={query}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
@@ -92,15 +97,12 @@ def search_collection_tmdb(query):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_collection_details(collection_id):
-    """جلب أفلام السلسلة بالكامل وتمريرها مرتبة بحسب تاريخ العرض"""
     url = f"https://api.themoviedb.org/3/collection/{collection_id}?api_key={API_KEY}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             data = res.json()
             parts = data.get("parts", [])
-            
-            # ترتيب أفلام السلسلة حسب سنة الإصدار من القديم للحديث
             parts_sorted = sorted(parts, key=lambda x: x.get("release_date", "9999") or "9999")
             
             formatted_parts = []
@@ -138,11 +140,14 @@ def get_collection_details(collection_id):
 def fetch_movie_modal_data(movie_id):
     info_url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US"
     videos_url = f"https://api.themoviedb.org/3/movie/{movie_id}/videos?api_key={API_KEY}&language=en-US"
+    credits_url = f"https://api.themoviedb.org/3/movie/{movie_id}/credits?api_key={API_KEY}&language=en-US"
     
     overview = "No overview available."
     runtime = "N/A"
     imdb_id = None
     youtube_key = None
+    director = "N/A"
+    cast = []
     
     try:
         res_info = requests.get(info_url, timeout=5)
@@ -159,10 +164,20 @@ def fetch_movie_modal_data(movie_id):
                 if vid.get("site") == "YouTube" and vid.get("type") in ["Trailer", "Teaser"]:
                     youtube_key = vid.get("key")
                     break
+                    
+        res_credits = requests.get(credits_url, timeout=5)
+        if res_credits.status_code == 200:
+            c_data = res_credits.json()
+            crew = c_data.get("crew", [])
+            for person in crew:
+                if person.get("job") == "Director":
+                    director = person.get("name")
+                    break
+            cast = c_data.get("cast", [])[:4] # أبرز 4 ممثلين
     except Exception as e:
         print(f"Error fetching modal details: {e}")
         
-    return overview, runtime, imdb_id, youtube_key
+    return overview, runtime, imdb_id, youtube_key, director, cast
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_movie_watch_providers(movie_id):
@@ -244,9 +259,9 @@ def get_recommendations_from_tmdb(movie_id, genre_filter="All"):
         print(f"Error fetching recommendations: {e}")
     return []
 
-@st.dialog("🎬 Movie Details, Streaming & Trailer", width="large")
+@st.dialog("🎬 Movie Details, Cast & Trailer", width="large")
 def show_movie_modal(item):
-    overview, runtime, imdb_id, youtube_key = fetch_movie_modal_data(item['movie_id'])
+    overview, runtime, imdb_id, youtube_key, director, cast = fetch_movie_modal_data(item['movie_id'])
     providers = get_movie_watch_providers(item['movie_id'])
     
     col1, col2 = st.columns([1, 2])
@@ -260,14 +275,29 @@ def show_movie_modal(item):
         
     with col2:
         st.subheader(f"{item['title']} ({item['year']})")
+        st.markdown(f"🎬 **Director:** {director}")
         st.markdown("**Overview / Storyline:**")
         st.write(overview)
         
+        # استعراض طاقم التمثيل الرئيسي (Top Cast)
+        if cast:
+            st.markdown("**👥 Top Cast:**")
+            cast_cols = st.columns(len(cast))
+            for i, actor in enumerate(cast):
+                with cast_cols[i]:
+                    profile_path = actor.get("profile_path")
+                    if profile_path:
+                        st.image(f"https://image.tmdb.org/t/p/w185{profile_path}", use_container_width=True)
+                    else:
+                        st.image(NO_IMAGE_URL, use_container_width=True)
+                    st.markdown(f'<div class="cast-name">{actor.get("name")}</div>', unsafe_allow_html=True)
+        
+        # عرض منصات البث أونلاين
         st.markdown("**📺 Where to Watch (Streaming):**")
         if providers:
-            cols = st.columns(min(len(providers), 4))
+            prov_cols = st.columns(min(len(providers), 4))
             for i, prov in enumerate(providers[:4]):
-                with cols[i]:
+                with prov_cols[i]:
                     logo_path = prov.get("logo_path")
                     if logo_path:
                         st.image(f"https://image.tmdb.org/t/p/w92{logo_path}", width=45)
@@ -281,7 +311,7 @@ def show_movie_modal(item):
         else:
             st.info("No trailer video available for this movie.")
 
-# الشريط الجانبي
+# الشريط الجانبي (Sidebar)
 st.sidebar.header("⚙️ Controls & Filters")
 num_recommendations = st.sidebar.slider("Number of Movies:", min_value=3, max_value=20, value=6, key="num_movies_slider")
 
@@ -295,6 +325,14 @@ selected_genre = st.sidebar.selectbox(
     "Filter by Genre:",
     ALL_GENRES,
     key="genre_filter_select"
+)
+
+st.sidebar.markdown("---")
+st.sidebar.header("📅 Year Range Filter")
+year_range = st.sidebar.slider(
+    "Release Year:",
+    min_value=1950, max_value=2026, value=(2010, 2026),
+    key="year_range_slider"
 )
 
 # الواجهة الرئيسية باستخدام التبويبات (Tabs)
@@ -346,7 +384,7 @@ with tab1:
             st.markdown(f"### {sel_movie['title']} ({sel_movie['year']})")
             st.markdown(f"⭐ **Rating:** {sel_movie['rating']}/10")
             st.write(sel_movie['overview'])
-            if st.button("ℹ️ Full Details, Streaming & Trailer", key="btn_selected_details"):
+            if st.button("ℹ️ Full Details, Cast & Trailer", key="btn_selected_details"):
                 show_movie_modal(sel_movie)
 
         st.markdown("---")
@@ -355,6 +393,20 @@ with tab1:
     if st.session_state.recommendations:
         results = st.session_state.recommendations.copy()
         
+        # فلترة نطاق سنوات الإنتاج (Release Year Range Filter)
+        filtered_results = []
+        for item in results:
+            y_str = item['year']
+            if y_str.isdigit():
+                y_int = int(y_str)
+                if year_range[0] <= y_int <= year_range[1]:
+                    filtered_results.append(item)
+            else:
+                # إذا كانت السنة غير متوفرة، نقبلها أو نتخطاها حسب الرغبة
+                filtered_results.append(item)
+                
+        results = filtered_results
+
         if sort_option == "Popularity / Match":
             results = sorted(results, key=lambda x: x['match'], reverse=True)
         elif sort_option == "Highest Rating":
@@ -365,7 +417,7 @@ with tab1:
         results = results[:num_recommendations]
         
         if not results:
-            st.warning(f"⚠️ No recommendations found matching the genre '{selected_genre}' for this movie.")
+            st.warning(f"⚠️ No recommendations found matching the selected filters and year range ({year_range[0]} - {year_range[1]}).")
         else:
             COLS_PER_ROW = 5
             for row_start in range(0, len(results), COLS_PER_ROW):
