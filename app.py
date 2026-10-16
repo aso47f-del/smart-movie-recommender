@@ -58,7 +58,6 @@ ALL_GENRES = [
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_movie_tmdb(query):
-    """البحث عن فيلم عبر TMDB API مباشرة"""
     url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={query}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
@@ -70,7 +69,6 @@ def search_movie_tmdb(query):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_trending_movies():
-    """جلب الأفلام الرائجة اليوم"""
     url = f"https://api.themoviedb.org/3/trending/movie/day?api_key={API_KEY}"
     try:
         res = requests.get(url, timeout=5)
@@ -82,7 +80,6 @@ def get_trending_movies():
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def fetch_movie_modal_data(movie_id):
-    """جلب تفاصيل القصة والتريلر للنافذة المنبثقة"""
     info_url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US"
     videos_url = f"https://api.themoviedb.org/3/movie/{movie_id}/videos?api_key={API_KEY}&language=en-US"
     
@@ -113,7 +110,6 @@ def fetch_movie_modal_data(movie_id):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_movie_details(movie_id):
-    """جلب تفاصيل الفيلم المختار ليتم عرضه منفصلاً"""
     url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
@@ -138,15 +134,27 @@ def get_movie_details(movie_id):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_recommendations_from_tmdb(movie_id, genre_filter="All"):
-    """جلب التوصيات مباشرة من TMDB API"""
+    genre_mapping = {
+        "Action": 28, "Adventure": 12, "Animation": 16, "Comedy": 35, 
+        "Crime": 80, "Documentary": 99, "Drama": 18, "Family": 10751, 
+        "Fantasy": 14, "History": 36, "Horror": 27, "Music": 10402, 
+        "Mystery": 9648, "Romance": 10749, "Science Fiction": 878, 
+        "TV Movie": 10770, "Thriller": 53, "War": 10752, "Western": 37
+    }
+    
     url = f"https://api.themoviedb.org/3/movie/{movie_id}/recommendations?api_key={API_KEY}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             results = res.json().get("results", [])
             recommendations = []
+            target_genre_id = genre_mapping.get(genre_filter) if genre_filter != "All" else None
             
             for item in results:
+                genre_ids = item.get("genre_ids", [])
+                if target_genre_id and target_genre_id not in genre_ids:
+                    continue
+                    
                 poster_path = item.get("poster_path")
                 poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else NO_IMAGE_URL
                 raw_rating = item.get("vote_average", 0.0)
@@ -192,26 +200,28 @@ def show_movie_modal(item):
 
 # الشريط الجانبي
 st.sidebar.header("⚙️ Controls & Filters")
-num_recommendations = st.sidebar.slider("Number of Movies:", min_value=3, max_value=20, value=6)
+num_recommendations = st.sidebar.slider("Number of Movies:", min_value=3, max_value=20, value=6, key="num_movies_slider")
 
 sort_option = st.sidebar.selectbox(
     "Sort Recommendations By:",
-    ["Popularity / Match", "Highest Rating", "Release Year (Newest)"]
+    ["Popularity / Match", "Highest Rating", "Release Year (Newest)"],
+    key="sort_option_select"
 )
 
 selected_genre = st.sidebar.selectbox(
     "Filter by Genre:",
-    ALL_GENRES
+    ALL_GENRES,
+    key="genre_filter_select"
 )
 
 st.sidebar.markdown("---")
-if st.sidebar.button("Surprise Me! 🎲", use_container_width=True):
+if st.sidebar.button("Surprise Me! 🎲", use_container_width=True, key="surprise_btn"):
     trending = get_trending_movies()
     if trending:
         import random
         rand_movie = random.choice(trending)
         st.session_state.selected_movie_id = rand_movie.get("id")
-        st.session_state.selected_movie_title = rand_movie.get("title")
+        st.session_state.selected_movie_info = get_movie_details(rand_movie.get("id"))
         with st.spinner(f'Surprise! Recommending based on "{rand_movie.get("title")}"...'):
             st.session_state.recommendations = get_recommendations_from_tmdb(rand_movie.get("id"), selected_genre)
 
@@ -219,15 +229,12 @@ if st.sidebar.button("Surprise Me! 🎲", use_container_width=True):
 st.title("🎬 Smart Live Movie Recommender System")
 st.caption("Now powered by live TMDB API — updated daily with new releases and no CSV files required!")
 
-search_query = st.text_input("Search for any movie globally:", "Obsession")
-
-search_query = st.text_input("Search for any movie globally:", "Obsession")
+search_query = st.text_input("Search for any movie globally:", "Obsession", key="global_search_input")
 
 selected_movie_id = None
 if search_query:
     search_results = search_movie_tmdb(search_query)
     if search_results:
-        # إنشاء قائمة تعرض اسم الفيلم مع سنة الإصدار لسهولة التمييز (مثال: Obsession (2024))
         movie_options = []
         movie_dict_map = {}
         
@@ -239,14 +246,14 @@ if search_query:
             movie_options.append(display_name)
             movie_dict_map[display_name] = m.get("id")
         
-        chosen_option = st.selectbox("Select from search results:", movie_options)
+        chosen_option = st.selectbox("Select from search results:", movie_options, key="search_results_selectbox")
         selected_movie_id = movie_dict_map.get(chosen_option)
         st.session_state.selected_movie_id = selected_movie_id
 
 if "recommendations" not in st.session_state:
     st.session_state.recommendations = []
 
-if st.button("Get Recommendations 🚀", type="primary") and selected_movie_id:
+if st.button("Get Recommendations 🚀", type="primary", key="get_recs_btn") and selected_movie_id:
     with st.spinner('Fetching movie details and live recommendations...'):
         st.session_state.selected_movie_info = get_movie_details(selected_movie_id)
         st.session_state.recommendations = get_recommendations_from_tmdb(selected_movie_id, selected_genre)
