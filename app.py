@@ -112,6 +112,31 @@ def fetch_movie_modal_data(movie_id):
     return overview, runtime, imdb_id, youtube_key
 
 @st.cache_data(show_spinner=False, ttl=86400)
+def get_movie_details(movie_id):
+    """جلب تفاصيل الفيلم المختار ليتم عرضه منفصلاً"""
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US"
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            poster_path = data.get("poster_path")
+            poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else NO_IMAGE_URL
+            raw_rating = data.get("vote_average", 0.0)
+            rating = round(raw_rating, 1) if raw_rating else 0.0
+            release_date = data.get("release_date", "N/A")[:4]
+            return {
+                'movie_id': data.get("id"),
+                'title': data.get("title"),
+                'poster': poster_url,
+                'rating': rating,
+                'year': release_date,
+                'overview': data.get("overview", "")
+            }
+    except Exception as e:
+        print(f"Error fetching selected movie details: {e}")
+    return None
+
+@st.cache_data(show_spinner=False, ttl=86400)
 def get_recommendations_from_tmdb(movie_id, genre_filter="All"):
     """جلب التوصيات مباشرة من TMDB API"""
     url = f"https://api.themoviedb.org/3/movie/{movie_id}/recommendations?api_key={API_KEY}&language=en-US"
@@ -212,13 +237,33 @@ if "recommendations" not in st.session_state:
     st.session_state.recommendations = []
 
 if st.button("Get Recommendations 🚀", type="primary") and selected_movie_id:
-    with st.spinner('Fetching live recommendations from TMDB...'):
+    with st.spinner('Fetching movie details and live recommendations...'):
+        st.session_state.selected_movie_info = get_movie_details(selected_movie_id)
         st.session_state.recommendations = get_recommendations_from_tmdb(selected_movie_id, selected_genre)
 
+# 1. عرض الفيلم المختار في قسم منفصل بالأعلى
+if "selected_movie_info" in st.session_state and st.session_state.selected_movie_info:
+    sel_movie = st.session_state.selected_movie_info
+    st.markdown("---")
+    st.subheader("🎯 Selected Movie")
+    
+    col_img, col_info = st.columns([1, 4])
+    with col_img:
+        st.image(sel_movie['poster'], width=180)
+    with col_info:
+        st.markdown(f"### {sel_movie['title']} ({sel_movie['year']})")
+        st.markdown(f"⭐ **Rating:** {sel_movie['rating']}/10")
+        st.write(sel_movie['overview'])
+        if st.button("ℹ️ Full Details & Trailer", key="btn_selected_details"):
+            show_movie_modal(sel_movie)
+
+    st.markdown("---")
+    st.subheader("🍿 Recommended Movies")
+
+# 2. عرض نتائج التوصيات أسفله
 if st.session_state.recommendations:
     results = st.session_state.recommendations.copy()
     
-    # الترتيب أولاً بناءً على اختيار المستخدم بشكل تنازلي (من الأكبر للأصغر)
     if sort_option == "Popularity / Match":
         results = sorted(results, key=lambda x: x['match'], reverse=True)
     elif sort_option == "Highest Rating":
@@ -226,27 +271,29 @@ if st.session_state.recommendations:
     elif sort_option == "Release Year (Newest)":
         results = sorted(results, key=lambda x: x['year'], reverse=True)
         
-    # ثم أخذ العدد الذي حدده المستخدم من القائمة المرتبة
     results = results[:num_recommendations]
-
-    COLS_PER_ROW = 5
-    for row_start in range(0, len(results), COLS_PER_ROW):
-        row_items = results[row_start : row_start + COLS_PER_ROW]
-        cols = st.columns(COLS_PER_ROW)
-        
-        for idx, item in enumerate(row_items):
-            with cols[idx]:
-                st.image(item['poster'], use_container_width=True)
-                st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
-                st.markdown(
-                    f'<div class="movie-info">'
-                    f'<span class="movie-rating">⭐ {item["rating"]}/10</span> | '
-                    f'<span class="movie-match">🎯 {item["match"]}%</span>'
-                    f'</div>', 
-                    unsafe_allow_html=True
-                )
-                
-                if st.button("ℹ️ Details", key=f"btn_{item['movie_id']}_{row_start + idx}"):
-                    show_movie_modal(item)
-else:
+    
+    if not results:
+        st.warning(f"⚠️ No recommendations found matching the genre '{selected_genre}' for this movie. Try choosing 'All' or a different genre!")
+    else:
+        COLS_PER_ROW = 5
+        for row_start in range(0, len(results), COLS_PER_ROW):
+            row_items = results[row_start : row_start + COLS_PER_ROW]
+            cols = st.columns(COLS_PER_ROW)
+            
+            for idx, item in enumerate(row_items):
+                with cols[idx]:
+                    st.image(item['poster'], use_container_width=True)
+                    st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div class="movie-info">'
+                        f'<span class="movie-rating">⭐ {item["rating"]}/10</span> | '
+                        f'<span class="movie-match">🎯 {item["match"]}%</span>'
+                        f'</div>', 
+                        unsafe_allow_html=True
+                    )
+                    
+                    if st.button("ℹ️ Details", key=f"btn_{item['movie_id']}_{row_start + idx}"):
+                        show_movie_modal(item)
+elif "selected_movie_info" not in st.session_state:
     st.info("Search for a movie and click 'Get Recommendations' to start exploring!")
