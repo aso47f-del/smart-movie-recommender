@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import random
 
 # 1. إعدادات الصفحة
 st.set_page_config(
@@ -73,13 +74,13 @@ POPULAR_COLLECTIONS = {
     "Toy Story Collection": 10194
 }
 
-# خيارات المزاج السينمائي مع ربطها بتصنيفات TMDB Genres
+# خيارات المزاج السينمائي باللغة الإنجليزية المتناسقة
 MOOD_OPTIONS = {
-    "🏃‍♂️ حماسي وسريع (Action & Adventure)": {"genres": "28,12", "sort": "popularity.desc"},
-    "🕵️‍♂️ غموض يشد الأعصاب (Mystery & Thriller)": {"genres": "9648,53", "sort": "vote_average.desc"},
-    "🍿 عائلي ودافئ (Family & Animation)": {"genres": "10751,16", "sort": "popularity.desc"},
-    "👻 مرعب ومظلم (Horror)": {"genres": "27", "sort": "popularity.desc"},
-    "💖 رومانسي ودرامي (Romance & Drama)": {"genres": "10749,18", "sort": "vote_average.desc"}
+    "Action & Adventure 🏃‍♂️": {"genres": "28,12", "sort": "popularity.desc"},
+    "Mystery & Thriller 🕵️‍♂️": {"genres": "9648,53", "sort": "vote_average.desc"},
+    "Family & Animation 🍿": {"genres": "10751,16", "sort": "popularity.desc"},
+    "Horror 👻": {"genres": "27", "sort": "popularity.desc"},
+    "Romance & Drama 💖": {"genres": "10749,18", "sort": "vote_average.desc"}
 }
 
 @st.cache_data(show_spinner=False, ttl=86400)
@@ -106,7 +107,6 @@ def search_collection_tmdb(query):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_person_tmdb(query):
-    """البحث عن ممثل أو مخرج"""
     url = f"https://api.themoviedb.org/3/search/person?api_key={API_KEY}&query={query}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
@@ -118,15 +118,24 @@ def search_person_tmdb(query):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_person_filmography(person_id):
-    """جلب أعمال الممثل أو المخرج كاملة"""
+    """جلب أعمال الممثل أو المخرج كاملة من خلال دمج Cast و Crew وإزالة التكرار"""
     url = f"https://api.themoviedb.org/3/person/{person_id}/movie_credits?api_key={API_KEY}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             data = res.json()
             cast_movies = data.get("cast", [])
-            # ترتيب الأعمال حسب الشعبية أو التقييم
-            sorted_movies = sorted(cast_movies, key=lambda x: x.get("popularity", 0), reverse=True)
+            crew_movies = data.get("crew", [])
+            
+            # دمج القائمتين وتجنب تكرار الفيلم إذا شارك الشخص بأكثر من صفة
+            all_movies_dict = {}
+            for m in cast_movies + crew_movies:
+                m_id = m.get("id")
+                if m_id and m_id not in all_movies_dict:
+                    all_movies_dict[m_id] = m
+                    
+            combined_movies = list(all_movies_dict.values())
+            sorted_movies = sorted(combined_movies, key=lambda x: x.get("popularity", 0), reverse=True)
             
             formatted_movies = []
             for item in sorted_movies:
@@ -148,10 +157,10 @@ def get_person_filmography(person_id):
         print(f"Error fetching person filmography: {e}")
     return []
 
-@st.cache_data(show_spinner=False, ttl=86400)
 def discover_movies_by_mood(genre_ids, sort_by):
-    """جلب الأفلام بناءً على المزاج باستخدام Discover API"""
-    url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres={genre_ids}&sort_by={sort_by}&language=en-US"
+    """جلب أفلام عشوائية ومتجددة بناءً على المزاج باستخدام صفحة عشوائية (Random Page)"""
+    rand_page = random.randint(1, 5)
+    url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres={genre_ids}&sort_by={sort_by}&page={rand_page}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
@@ -409,7 +418,7 @@ selected_genre = st.sidebar.selectbox(
 
 # الواجهة الرئيسية باستخدام 3 تبويبات (Tabs)
 st.title("🎬 Smart Live Movie & Franchise Hub")
-st.caption("Explore live recommendations, complete franchises, mood-based picks, and actor filmographies!")
+st.caption("Explore live recommendations, complete franchises, mood-based picks, and actor/director filmographies!")
 
 tab1, tab2, tab3 = st.tabs(["🍿 Recommendations", "🎞️ Franchises", "🎲 Mood & Cast Hub"])
 
@@ -553,20 +562,20 @@ with tab2:
 with tab3:
     sub_tab1, sub_tab2 = st.tabs(["🎲 Mood-Based Recommender", "🎭 Actor & Director Explorer"])
     
-    # فرع 1: موجه المزاج
+    # فرع 1: موجه المزاج (مع دعم التجديد والعشوائية)
     with sub_tab1:
         st.subheader("How are you feeling today? Choose your mood:")
         selected_mood = st.selectbox("Select Mood:", list(MOOD_OPTIONS.keys()), key="mood_selector")
         
         if st.button("Find Movies for this Mood 🎯", type="primary", key="mood_btn"):
             mood_data = MOOD_OPTIONS[selected_mood]
-            with st.spinner("Finding best movies matching your mood..."):
+            with st.spinner("Finding fresh movies matching your mood..."):
                 mood_movies = discover_movies_by_mood(mood_data["genres"], mood_data["sort"])
                 st.session_state.mood_movies = mood_movies[:10]
                 
         if "mood_movies" in st.session_state and st.session_state.mood_movies:
             st.markdown("---")
-            st.markdown("### 🌟 Recommended for your mood:")
+            st.markdown("### 🌟 Recommended for your mood (Click again for new suggestions!):")
             m_results = st.session_state.mood_movies
             COLS_PER_ROW = 5
             for row_start in range(0, len(m_results), COLS_PER_ROW):
@@ -586,10 +595,10 @@ with tab3:
                         if st.button("ℹ️ Details", key=f"btn_mood_{item['movie_id']}_{row_start + idx}"):
                             show_movie_modal(item)
 
-    # فرع 2: مستكشف الممثلين والمخرجين
+    # فرع 2: مستكشف الممثلين والمخرجين الشامل (Cast + Crew)
     with sub_tab2:
         st.subheader("Explore Actor or Director Filmography")
-        person_query = st.text_input("Search for an actor or director (e.g. Christopher Nolan, Tom Cruise):", "", key="person_search_input")
+        person_query = st.text_input("Search for an actor or director (e.g. Christopher Nolan, Leonardo DiCaprio):", "", key="person_search_input")
         
         selected_person_id = None
         if person_query:
@@ -601,13 +610,13 @@ with tab3:
                 
         if selected_person_id:
             if st.button("Show Filmography 🎥", type="primary", key="person_btn"):
-                with st.spinner("Fetching filmography..."):
+                with st.spinner("Fetching full filmography (Cast & Crew)..."):
                     st.session_state.person_movies = get_person_filmography(selected_person_id)
                     
         if "person_movies" in st.session_state and st.session_state.person_movies:
             st.markdown("---")
-            st.markdown("### 🎬 Famous Works:")
-            p_results = st.session_state.person_movies[:15]
+            st.markdown("### 🎬 Complete Filmography:")
+            p_results = st.session_state.person_movies[:20] # عرض حتى 20 عمل بارز
             COLS_PER_ROW = 5
             for row_start in range(0, len(p_results), COLS_PER_ROW):
                 row_items = p_results[row_start : row_start + COLS_PER_ROW]
@@ -621,7 +630,7 @@ with tab3:
                             f'<div class="movie-info">'
                             f'<span class="movie-rating">⭐ {item["rating"]}/10</span>'
                             f'</div>', 
-                            unsafe_allow_html=True
+                        unsafe_allow_html=True
                         )
                         if st.button("ℹ️ Details", key=f"btn_person_{item['movie_id']}_{row_start + idx}"):
                             show_movie_modal(item)
