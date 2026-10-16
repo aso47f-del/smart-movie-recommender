@@ -109,6 +109,22 @@ def fetch_movie_modal_data(movie_id):
     return overview, runtime, imdb_id, youtube_key
 
 @st.cache_data(show_spinner=False, ttl=86400)
+def get_movie_watch_providers(movie_id):
+    """جلب منصات البث والعرض أونلاين المتاحة للفيلم (Netflix, Prime Video, etc.)"""
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}/watch/providers?api_key={API_KEY}"
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            data = res.json().get("results", {})
+            # البحث في الدول المتاحة وأخذ أول دولة متوفرة (مثل US أو EG)
+            for country in ['US', 'EG', 'GB', 'FR']:
+                if country in data and 'flatrate' in data[country]:
+                    return data[country]['flatrate']
+    except Exception as e:
+        print(f"Error fetching watch providers: {e}")
+    return []
+
+@st.cache_data(show_spinner=False, ttl=86400)
 def get_movie_details(movie_id):
     url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US"
     try:
@@ -174,9 +190,10 @@ def get_recommendations_from_tmdb(movie_id, genre_filter="All"):
         print(f"Error fetching recommendations: {e}")
     return []
 
-@st.dialog("🎬 Movie Details & Trailer", width="large")
+@st.dialog("🎬 Movie Details, Streaming & Trailer", width="large")
 def show_movie_modal(item):
     overview, runtime, imdb_id, youtube_key = fetch_movie_modal_data(item['movie_id'])
+    providers = get_movie_watch_providers(item['movie_id'])
     
     col1, col2 = st.columns([1, 2])
     with col1:
@@ -191,6 +208,19 @@ def show_movie_modal(item):
         st.subheader(f"{item['title']} ({item['year']})")
         st.markdown("**Overview / Storyline:**")
         st.write(overview)
+        
+        # عرض منصات البث أونلاين
+        st.markdown("**📺 Where to Watch (Streaming):**")
+        if providers:
+            cols = st.columns(min(len(providers), 4))
+            for i, prov in enumerate(providers[:4]):
+                with cols[i]:
+                    logo_path = prov.get("logo_path")
+                    if logo_path:
+                        st.image(f"https://image.tmdb.org/t/p/w92{logo_path}", width=45)
+                    st.caption(prov.get("provider_name"))
+        else:
+            st.info("No online streaming providers available for this movie currently.")
         
         if youtube_key:
             st.markdown("**Official Trailer:**")
@@ -271,7 +301,7 @@ if "selected_movie_info" in st.session_state and st.session_state.selected_movie
         st.markdown(f"### {sel_movie['title']} ({sel_movie['year']})")
         st.markdown(f"⭐ **Rating:** {sel_movie['rating']}/10")
         st.write(sel_movie['overview'])
-        if st.button("ℹ️ Full Details & Trailer", key="btn_selected_details"):
+        if st.button("ℹ️ Full Details, Streaming & Trailer", key="btn_selected_details"):
             show_movie_modal(sel_movie)
 
     st.markdown("---")
