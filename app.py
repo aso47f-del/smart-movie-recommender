@@ -73,6 +73,15 @@ POPULAR_COLLECTIONS = {
     "Toy Story Collection": 10194
 }
 
+# خيارات المزاج السينمائي مع ربطها بتصنيفات TMDB Genres
+MOOD_OPTIONS = {
+    "🏃‍♂️ حماسي وسريع (Action & Adventure)": {"genres": "28,12", "sort": "popularity.desc"},
+    "🕵️‍♂️ غموض يشد الأعصاب (Mystery & Thriller)": {"genres": "9648,53", "sort": "vote_average.desc"},
+    "🍿 عائلي ودافئ (Family & Animation)": {"genres": "10751,16", "sort": "popularity.desc"},
+    "👻 مرعب ومظلم (Horror)": {"genres": "27", "sort": "popularity.desc"},
+    "💖 رومانسي ودرامي (Romance & Drama)": {"genres": "10749,18", "sort": "vote_average.desc"}
+}
+
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_movie_tmdb(query):
     url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={query}&language=en-US"
@@ -93,6 +102,79 @@ def search_collection_tmdb(query):
             return res.json().get("results", [])
     except Exception as e:
         print(f"Error searching collection: {e}")
+    return []
+
+@st.cache_data(show_spinner=False, ttl=86400)
+def search_person_tmdb(query):
+    """البحث عن ممثل أو مخرج"""
+    url = f"https://api.themoviedb.org/3/search/person?api_key={API_KEY}&query={query}&language=en-US"
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            return res.json().get("results", [])
+    except Exception as e:
+        print(f"Error searching person: {e}")
+    return []
+
+@st.cache_data(show_spinner=False, ttl=86400)
+def get_person_filmography(person_id):
+    """جلب أعمال الممثل أو المخرج كاملة"""
+    url = f"https://api.themoviedb.org/3/person/{person_id}/movie_credits?api_key={API_KEY}&language=en-US"
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            cast_movies = data.get("cast", [])
+            # ترتيب الأعمال حسب الشعبية أو التقييم
+            sorted_movies = sorted(cast_movies, key=lambda x: x.get("popularity", 0), reverse=True)
+            
+            formatted_movies = []
+            for item in sorted_movies:
+                poster_path = item.get("poster_path")
+                poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else NO_IMAGE_URL
+                raw_rating = item.get("vote_average", 0.0)
+                rating = round(raw_rating, 1) if raw_rating else 0.0
+                release_date = item.get("release_date", "N/A")[:4]
+                
+                formatted_movies.append({
+                    'movie_id': item.get("id"),
+                    'title': item.get("title"),
+                    'poster': poster_url,
+                    'rating': rating,
+                    'year': release_date if release_date else "N/A"
+                })
+            return formatted_movies
+    except Exception as e:
+        print(f"Error fetching person filmography: {e}")
+    return []
+
+@st.cache_data(show_spinner=False, ttl=86400)
+def discover_movies_by_mood(genre_ids, sort_by):
+    """جلب الأفلام بناءً على المزاج باستخدام Discover API"""
+    url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres={genre_ids}&sort_by={sort_by}&language=en-US"
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            results = res.json().get("results", [])
+            movies = []
+            for item in results:
+                poster_path = item.get("poster_path")
+                poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else NO_IMAGE_URL
+                raw_rating = item.get("vote_average", 0.0)
+                rating = round(raw_rating, 1) if raw_rating else 0.0
+                release_date = item.get("release_date", "N/A")[:4]
+                
+                movies.append({
+                    'movie_id': item.get("id"),
+                    'title': item.get("title"),
+                    'poster': poster_url,
+                    'rating': rating,
+                    'year': release_date,
+                    'match': int(item.get("popularity", 50)) % 15 + 80
+                })
+            return movies
+    except Exception as e:
+        print(f"Error discovering movies: {e}")
     return []
 
 @st.cache_data(show_spinner=False, ttl=86400)
@@ -325,11 +407,11 @@ selected_genre = st.sidebar.selectbox(
     key="genre_filter_select"
 )
 
-# الواجهة الرئيسية باستخدام التبويبات (Tabs)
+# الواجهة الرئيسية باستخدام 3 تبويبات (Tabs)
 st.title("🎬 Smart Live Movie & Franchise Hub")
-st.caption("Explore live movie recommendations or complete movie franchises ordered chronologically!")
+st.caption("Explore live recommendations, complete franchises, mood-based picks, and actor filmographies!")
 
-tab1, tab2 = st.tabs(["🍿 Movie Recommendations", "🎞️ Movie Franchises & Collections"])
+tab1, tab2, tab3 = st.tabs(["🍿 Recommendations", "🎞️ Franchises", "🎲 Mood & Cast Hub"])
 
 # --- TAB 1: التوصيات العادية ---
 with tab1:
@@ -420,11 +502,10 @@ with tab2:
     st.subheader("🔍 Explore Movie Franchises & Collections")
     
     col_preset, col_search = st.columns([1, 2])
-    
     selected_coll_id = None
     
     with col_preset:
-        preset_choice = st.selectbox("Popular Franchises:", ["Select a Franchise..."] + list(POPULAR_COLLECTIONS.keys()))
+        preset_choice = st.selectbox("Popular Franchises:", ["Select a Franchise..."] + list(POPULAR_COLLECTIONS.keys()), key="preset_franchise_sel")
         if preset_choice != "Select a Franchise...":
             selected_coll_id = POPULAR_COLLECTIONS[preset_choice]
 
@@ -467,3 +548,80 @@ with tab2:
                             
                             if st.button("ℹ️ Details", key=f"btn_coll_{item['movie_id']}_{row_start + idx}"):
                                 show_movie_modal(item)
+
+# --- TAB 3: موجه المزاج ومستكشف طاقم العمل (Mood & Cast Hub) ---
+with tab3:
+    sub_tab1, sub_tab2 = st.tabs(["🎲 Mood-Based Recommender", "🎭 Actor & Director Explorer"])
+    
+    # فرع 1: موجه المزاج
+    with sub_tab1:
+        st.subheader("How are you feeling today? Choose your mood:")
+        selected_mood = st.selectbox("Select Mood:", list(MOOD_OPTIONS.keys()), key="mood_selector")
+        
+        if st.button("Find Movies for this Mood 🎯", type="primary", key="mood_btn"):
+            mood_data = MOOD_OPTIONS[selected_mood]
+            with st.spinner("Finding best movies matching your mood..."):
+                mood_movies = discover_movies_by_mood(mood_data["genres"], mood_data["sort"])
+                st.session_state.mood_movies = mood_movies[:10]
+                
+        if "mood_movies" in st.session_state and st.session_state.mood_movies:
+            st.markdown("---")
+            st.markdown("### 🌟 Recommended for your mood:")
+            m_results = st.session_state.mood_movies
+            COLS_PER_ROW = 5
+            for row_start in range(0, len(m_results), COLS_PER_ROW):
+                row_items = m_results[row_start : row_start + COLS_PER_ROW]
+                cols = st.columns(COLS_PER_ROW)
+                
+                for idx, item in enumerate(row_items):
+                    with cols[idx]:
+                        st.image(item['poster'], use_container_width=True)
+                        st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
+                        st.markdown(
+                            f'<div class="movie-info">'
+                            f'<span class="movie-rating">⭐ {item["rating"]}/10</span>'
+                            f'</div>', 
+                            unsafe_allow_html=True
+                        )
+                        if st.button("ℹ️ Details", key=f"btn_mood_{item['movie_id']}_{row_start + idx}"):
+                            show_movie_modal(item)
+
+    # فرع 2: مستكشف الممثلين والمخرجين
+    with sub_tab2:
+        st.subheader("Explore Actor or Director Filmography")
+        person_query = st.text_input("Search for an actor or director (e.g. Christopher Nolan, Tom Cruise):", "", key="person_search_input")
+        
+        selected_person_id = None
+        if person_query:
+            person_results = search_person_tmdb(person_query)
+            if person_results:
+                person_options = {f"{p.get('name')} ({p.get('known_for_department', 'Artist')})": p.get('id') for p in person_results}
+                chosen_person = st.selectbox("Select Person:", list(person_options.keys()), key="person_selectbox")
+                selected_person_id = person_options.get(chosen_person)
+                
+        if selected_person_id:
+            if st.button("Show Filmography 🎥", type="primary", key="person_btn"):
+                with st.spinner("Fetching filmography..."):
+                    st.session_state.person_movies = get_person_filmography(selected_person_id)
+                    
+        if "person_movies" in st.session_state and st.session_state.person_movies:
+            st.markdown("---")
+            st.markdown("### 🎬 Famous Works:")
+            p_results = st.session_state.person_movies[:15]
+            COLS_PER_ROW = 5
+            for row_start in range(0, len(p_results), COLS_PER_ROW):
+                row_items = p_results[row_start : row_start + COLS_PER_ROW]
+                cols = st.columns(COLS_PER_ROW)
+                
+                for idx, item in enumerate(row_items):
+                    with cols[idx]:
+                        st.image(item['poster'], use_container_width=True)
+                        st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
+                        st.markdown(
+                            f'<div class="movie-info">'
+                            f'<span class="movie-rating">⭐ {item["rating"]}/10</span>'
+                            f'</div>', 
+                            unsafe_allow_html=True
+                        )
+                        if st.button("ℹ️ Details", key=f"btn_person_{item['movie_id']}_{row_start + idx}"):
+                            show_movie_modal(item)
