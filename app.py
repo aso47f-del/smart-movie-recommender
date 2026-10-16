@@ -113,6 +113,51 @@ def fetch_movie_modal_data(movie_id):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_recommendations_from_tmdb(movie_id, genre_filter="All"):
+    """جلب التوصيات مباشرة من TMDB API مع تطبيق فلترة الـ Genres بدقة"""
+    
+    # قاموس ربط أسماء التصنيفات بأرقام الـ IDs المعتمدة في TMDB
+    genre_mapping = {
+        "Action": 28, "Adventure": 12, "Animation": 16, "Comedy": 35, 
+        "Crime": 80, "Documentary": 99, "Drama": 18, "Family": 10751, 
+        "Fantasy": 14, "History": 36, "Horror": 27, "Music": 10402, 
+        "Mystery": 9648, "Romance": 10749, "Science Fiction": 878, 
+        "TV Movie": 10770, "Thriller": 53, "War": 10752, "Western": 37
+    }
+    
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}/recommendations?api_key={API_KEY}&language=en-US"
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            results = res.json().get("results", [])
+            recommendations = []
+            
+            target_genre_id = genre_mapping.get(genre_filter) if genre_filter != "All" else None
+            
+            for item in results:
+                genre_ids = item.get("genre_ids", [])
+                
+                # إذا اختار المستخدم تصنيفاً معيناً، نقوم بتخطي الأفلام التي لا تنتمي له
+                if target_genre_id and target_genre_id not in genre_ids:
+                    continue
+                    
+                poster_path = item.get("poster_path")
+                poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else NO_IMAGE_URL
+                raw_rating = item.get("vote_average", 0.0)
+                rating = round(raw_rating, 1) if raw_rating else 0.0
+                release_date = item.get("release_date", "N/A")[:4]
+                
+                recommendations.append({
+                    'movie_id': item.get("id"),
+                    'title': item.get("title"),
+                    'poster': poster_url,
+                    'rating': rating,
+                    'year': release_date,
+                    'match': int(item.get("popularity", 50)) % 15 + 80
+                })
+            return recommendations
+    except Exception as e:
+        print(f"Error fetching recommendations: {e}")
+    return []
     """جلب التوصيات مباشرة من TMDB API"""
     url = f"https://api.themoviedb.org/3/movie/{movie_id}/recommendations?api_key={API_KEY}&language=en-US"
     try:
