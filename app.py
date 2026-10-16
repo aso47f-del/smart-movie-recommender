@@ -527,25 +527,37 @@ with tab1:
                         if st.button("ℹ️ Details", key=f"btn_{item['movie_id']}_{row_start + idx}"):
                             show_movie_modal(item)
 
-# --- TAB 2: قسم سلاسل الأفلام (Franchises مع تصحيح الاستجابة التلقائية) ---
+# --- TAB 2: قسم سلاسل الأفلام (Franchises مع استخدام Radio لتجنب التداخل) ---
 with tab2:
     st.subheader("🔍 Explore Movie Franchises & Collections")
     
-    col_preset, col_search = st.columns([1, 2])
+    search_mode = st.radio(
+        "Choose how to explore:", 
+        ["Popular Franchises ⭐", "Search Any Franchise 🔍"], 
+        horizontal=True,
+        key="franchise_mode_radio"
+    )
+    
     selected_coll_id = None
     
-    with col_preset:
-        preset_choice = st.selectbox("Popular Franchises:", ["Select a Franchise..."] + list(POPULAR_COLLECTIONS.keys()), key="preset_franchise_sel")
-        if preset_choice != "Select a Franchise...":
-            selected_coll_id = POPULAR_COLLECTIONS[preset_choice]
-
-    with col_search:
-        franchise_query = st.text_input("Or search for any Franchise / Collection:", "", key="franchise_search_input")
+    if search_mode == "Popular Franchises ⭐":
+        preset_choice = st.selectbox(
+            "Select a Popular Franchise:", 
+            list(POPULAR_COLLECTIONS.keys()), 
+            key="preset_franchise_sel"
+        )
+        selected_coll_id = POPULAR_COLLECTIONS.get(preset_choice)
+    else:
+        franchise_query = st.text_input(
+            "Search for any Franchise / Collection (e.g., Batman, Star Wars):", 
+            "", 
+            key="franchise_search_input"
+        )
         if franchise_query:
             coll_results = search_collection_tmdb(franchise_query)
             if coll_results:
                 coll_options = {c.get("name"): c.get("id") for c in coll_results}
-                chosen_coll_name = st.selectbox("Select Collection:", list(coll_options.keys()), key="coll_selectbox")
+                chosen_coll_name = st.selectbox("Select Collection from results:", list(coll_options.keys()), key="coll_selectbox")
                 selected_coll_id = coll_options.get(chosen_coll_name)
 
     if selected_coll_id:
