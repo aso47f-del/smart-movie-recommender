@@ -3,7 +3,7 @@ import requests
 
 # 1. إعدادات الصفحة
 st.set_page_config(
-    page_title="Smart Live Movie Recommender",
+    page_title="Smart Live Movie & Franchise Recommender",
     page_icon="🎬",
     layout="wide"
 )
@@ -56,6 +56,17 @@ ALL_GENRES = [
     "TV Movie", "Thriller", "War", "Western"
 ]
 
+POPULAR_COLLECTIONS = {
+    "John Wick Collection": 404366,
+    "The Dark Knight Trilogy": 263,
+    "Harry Potter Collection": 1241,
+    "The Lord of the Rings Collection": 119,
+    "Mission: Impossible Collection": 87096,
+    "The Avengers Collection": 86311,
+    "The Godfather Collection": 230,
+    "Toy Story Collection": 10194
+}
+
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_movie_tmdb(query):
     url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={query}&language=en-US"
@@ -68,15 +79,60 @@ def search_movie_tmdb(query):
     return []
 
 @st.cache_data(show_spinner=False, ttl=86400)
-def get_trending_movies():
-    url = f"https://api.themoviedb.org/3/trending/movie/day?api_key={API_KEY}"
+def search_collection_tmdb(query):
+    """البحث عن سلاسل الأفلام (Collections/Franchises)"""
+    url = f"https://api.themoviedb.org/3/search/collection?api_key={API_KEY}&query={query}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             return res.json().get("results", [])
     except Exception as e:
-        print(f"Error fetching trending movies: {e}")
+        print(f"Error searching collection: {e}")
     return []
+
+@st.cache_data(show_spinner=False, ttl=86400)
+def get_collection_details(collection_id):
+    """جلب أفلام السلسلة بالكامل وتمريرها مرتبة بحسب تاريخ العرض"""
+    url = f"https://api.themoviedb.org/3/collection/{collection_id}?api_key={API_KEY}&language=en-US"
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            parts = data.get("parts", [])
+            
+            # ترتيب أفلام السلسلة حسب سنة الإصدار من القديم للحديث
+            parts_sorted = sorted(parts, key=lambda x: x.get("release_date", "9999") or "9999")
+            
+            formatted_parts = []
+            for item in parts_sorted:
+                poster_path = item.get("poster_path")
+                poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else NO_IMAGE_URL
+                raw_rating = item.get("vote_average", 0.0)
+                rating = round(raw_rating, 1) if raw_rating else 0.0
+                release_date = item.get("release_date", "N/A")[:4]
+                
+                formatted_parts.append({
+                    'movie_id': item.get("id"),
+                    'title': item.get("title"),
+                    'poster': poster_url,
+                    'rating': rating,
+                    'year': release_date,
+                    'overview': item.get("overview", "")
+                })
+                
+            poster_path = data.get("poster_path")
+            coll_poster = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else NO_IMAGE_URL
+            
+            return {
+                'id': data.get("id"),
+                'name': data.get("name"),
+                'overview': data.get("overview", ""),
+                'poster': coll_poster,
+                'parts': formatted_parts
+            }
+    except Exception as e:
+        print(f"Error fetching collection details: {e}")
+    return None
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def fetch_movie_modal_data(movie_id):
@@ -110,13 +166,11 @@ def fetch_movie_modal_data(movie_id):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_movie_watch_providers(movie_id):
-    """جلب منصات البث والعرض أونلاين المتاحة للفيلم (Netflix, Prime Video, etc.)"""
     url = f"https://api.themoviedb.org/3/movie/{movie_id}/watch/providers?api_key={API_KEY}"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             data = res.json().get("results", {})
-            # البحث في الدول المتاحة وأخذ أول دولة متوفرة (مثل US أو EG)
             for country in ['US', 'EG', 'GB', 'FR']:
                 if country in data and 'flatrate' in data[country]:
                     return data[country]['flatrate']
@@ -209,7 +263,6 @@ def show_movie_modal(item):
         st.markdown("**Overview / Storyline:**")
         st.write(overview)
         
-        # عرض منصات البث أونلاين
         st.markdown("**📺 Where to Watch (Streaming):**")
         if providers:
             cols = st.columns(min(len(providers), 4))
@@ -244,103 +297,145 @@ selected_genre = st.sidebar.selectbox(
     key="genre_filter_select"
 )
 
-st.sidebar.markdown("---")
-if st.sidebar.button("Surprise Me! 🎲", use_container_width=True, key="surprise_btn"):
-    trending = get_trending_movies()
-    if trending:
-        import random
-        rand_movie = random.choice(trending)
-        st.session_state.selected_movie_id = rand_movie.get("id")
-        st.session_state.selected_movie_info = get_movie_details(rand_movie.get("id"))
-        with st.spinner(f'Surprise! Recommending based on "{rand_movie.get("title")}"...'):
-            st.session_state.recommendations = get_recommendations_from_tmdb(rand_movie.get("id"), selected_genre)
+# الواجهة الرئيسية باستخدام التبويبات (Tabs)
+st.title("🎬 Smart Live Movie & Franchise Hub")
+st.caption("Explore live movie recommendations or complete movie franchises ordered chronologically!")
 
-# الواجهة الرئيسية
-st.title("🎬 Smart Live Movie Recommender System")
-st.caption("Now powered by live TMDB API — updated daily with new releases and no CSV files required!")
+tab1, tab2 = st.tabs(["🍿 Movie Recommendations", "🎞️ Movie Franchises & Collections"])
 
-search_query = st.text_input("Search for any movie globally:", "Obsession", key="global_search_input")
+# --- TAB 1: التوصيات العادية ---
+with tab1:
+    search_query = st.text_input("Search for any movie globally:", "Obsession", key="global_search_input")
 
-selected_movie_id = None
-if search_query:
-    search_results = search_movie_tmdb(search_query)
-    if search_results:
-        movie_options = []
-        movie_dict_map = {}
-        
-        for m in search_results:
-            title = m.get("title", "Unknown")
-            year = m.get("release_date", "N/A")[:4]
-            display_name = f"{title} ({year})" if year and year != "N/A" else title
+    selected_movie_id = None
+    if search_query:
+        search_results = search_movie_tmdb(search_query)
+        if search_results:
+            movie_options = []
+            movie_dict_map = {}
             
-            movie_options.append(display_name)
-            movie_dict_map[display_name] = m.get("id")
-        
-        chosen_option = st.selectbox("Select from search results:", movie_options, key="search_results_selectbox")
-        selected_movie_id = movie_dict_map.get(chosen_option)
-        st.session_state.selected_movie_id = selected_movie_id
-
-if "recommendations" not in st.session_state:
-    st.session_state.recommendations = []
-
-if st.button("Get Recommendations 🚀", type="primary", key="get_recs_btn") and selected_movie_id:
-    with st.spinner('Fetching movie details and live recommendations...'):
-        st.session_state.selected_movie_info = get_movie_details(selected_movie_id)
-        st.session_state.recommendations = get_recommendations_from_tmdb(selected_movie_id, selected_genre)
-
-# 1. عرض الفيلم المختار في قسم منفصل بالأعلى
-if "selected_movie_info" in st.session_state and st.session_state.selected_movie_info:
-    sel_movie = st.session_state.selected_movie_info
-    st.markdown("---")
-    st.subheader("🎯 Selected Movie")
-    
-    col_img, col_info = st.columns([1, 4])
-    with col_img:
-        st.image(sel_movie['poster'], width=180)
-    with col_info:
-        st.markdown(f"### {sel_movie['title']} ({sel_movie['year']})")
-        st.markdown(f"⭐ **Rating:** {sel_movie['rating']}/10")
-        st.write(sel_movie['overview'])
-        if st.button("ℹ️ Full Details, Streaming & Trailer", key="btn_selected_details"):
-            show_movie_modal(sel_movie)
-
-    st.markdown("---")
-    st.subheader("🍿 Recommended Movies")
-
-# 2. عرض نتائج التوصيات أسفله
-if st.session_state.recommendations:
-    results = st.session_state.recommendations.copy()
-    
-    if sort_option == "Popularity / Match":
-        results = sorted(results, key=lambda x: x['match'], reverse=True)
-    elif sort_option == "Highest Rating":
-        results = sorted(results, key=lambda x: x['rating'], reverse=True)
-    elif sort_option == "Release Year (Newest)":
-        results = sorted(results, key=lambda x: x['year'], reverse=True)
-        
-    results = results[:num_recommendations]
-    
-    if not results:
-        st.warning(f"⚠️ No recommendations found matching the genre '{selected_genre}' for this movie. Try choosing 'All' or a different genre!")
-    else:
-        COLS_PER_ROW = 5
-        for row_start in range(0, len(results), COLS_PER_ROW):
-            row_items = results[row_start : row_start + COLS_PER_ROW]
-            cols = st.columns(COLS_PER_ROW)
+            for m in search_results:
+                title = m.get("title", "Unknown")
+                year = m.get("release_date", "N/A")[:4]
+                display_name = f"{title} ({year})" if year and year != "N/A" else title
+                
+                movie_options.append(display_name)
+                movie_dict_map[display_name] = m.get("id")
             
-            for idx, item in enumerate(row_items):
-                with cols[idx]:
-                    st.image(item['poster'], use_container_width=True)
-                    st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
-                    st.markdown(
-                        f'<div class="movie-info">'
-                        f'<span class="movie-rating">⭐ {item["rating"]}/10</span> | '
-                        f'<span class="movie-match">🎯 {item["match"]}%</span>'
-                        f'</div>', 
-                        unsafe_allow_html=True
-                    )
+            chosen_option = st.selectbox("Select from search results:", movie_options, key="search_results_selectbox")
+            selected_movie_id = movie_dict_map.get(chosen_option)
+            st.session_state.selected_movie_id = selected_movie_id
+
+    if "recommendations" not in st.session_state:
+        st.session_state.recommendations = []
+
+    if st.button("Get Recommendations 🚀", type="primary", key="get_recs_btn") and selected_movie_id:
+        with st.spinner('Fetching movie details and live recommendations...'):
+            st.session_state.selected_movie_info = get_movie_details(selected_movie_id)
+            st.session_state.recommendations = get_recommendations_from_tmdb(selected_movie_id, selected_genre)
+
+    if "selected_movie_info" in st.session_state and st.session_state.selected_movie_info:
+        sel_movie = st.session_state.selected_movie_info
+        st.markdown("---")
+        st.subheader("🎯 Selected Movie")
+        
+        col_img, col_info = st.columns([1, 4])
+        with col_img:
+            st.image(sel_movie['poster'], width=180)
+        with col_info:
+            st.markdown(f"### {sel_movie['title']} ({sel_movie['year']})")
+            st.markdown(f"⭐ **Rating:** {sel_movie['rating']}/10")
+            st.write(sel_movie['overview'])
+            if st.button("ℹ️ Full Details, Streaming & Trailer", key="btn_selected_details"):
+                show_movie_modal(sel_movie)
+
+        st.markdown("---")
+        st.subheader("🍿 Recommended Movies")
+
+    if st.session_state.recommendations:
+        results = st.session_state.recommendations.copy()
+        
+        if sort_option == "Popularity / Match":
+            results = sorted(results, key=lambda x: x['match'], reverse=True)
+        elif sort_option == "Highest Rating":
+            results = sorted(results, key=lambda x: x['rating'], reverse=True)
+        elif sort_option == "Release Year (Newest)":
+            results = sorted(results, key=lambda x: x['year'], reverse=True)
+            
+        results = results[:num_recommendations]
+        
+        if not results:
+            st.warning(f"⚠️ No recommendations found matching the genre '{selected_genre}' for this movie.")
+        else:
+            COLS_PER_ROW = 5
+            for row_start in range(0, len(results), COLS_PER_ROW):
+                row_items = results[row_start : row_start + COLS_PER_ROW]
+                cols = st.columns(COLS_PER_ROW)
+                
+                for idx, item in enumerate(row_items):
+                    with cols[idx]:
+                        st.image(item['poster'], use_container_width=True)
+                        st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
+                        st.markdown(
+                            f'<div class="movie-info">'
+                            f'<span class="movie-rating">⭐ {item["rating"]}/10</span> | '
+                            f'<span class="movie-match">🎯 {item["match"]}%</span>'
+                            f'</div>', 
+                            unsafe_allow_html=True
+                        )
+                        
+                        if st.button("ℹ️ Details", key=f"btn_{item['movie_id']}_{row_start + idx}"):
+                            show_movie_modal(item)
+
+# --- TAB 2: قسم سلاسل الأفلام (Franchises) ---
+with tab2:
+    st.subheader("🔍 Explore Movie Franchises & Collections")
+    
+    col_preset, col_search = st.columns([1, 2])
+    
+    selected_coll_id = None
+    
+    with col_preset:
+        preset_choice = st.selectbox("Popular Franchises:", ["Select a Franchise..."] + list(POPULAR_COLLECTIONS.keys()))
+        if preset_choice != "Select a Franchise...":
+            selected_coll_id = POPULAR_COLLECTIONS[preset_choice]
+
+    with col_search:
+        franchise_query = st.text_input("Or search for any Franchise / Collection:", "", key="franchise_search_input")
+        if franchise_query:
+            coll_results = search_collection_tmdb(franchise_query)
+            if coll_results:
+                coll_options = {c.get("name"): c.get("id") for c in coll_results}
+                chosen_coll_name = st.selectbox("Select Collection:", list(coll_options.keys()), key="coll_selectbox")
+                selected_coll_id = coll_options.get(chosen_coll_name)
+
+    if selected_coll_id:
+        with st.spinner("Fetching full franchise chronologically..."):
+            collection = get_collection_details(selected_coll_id)
+            
+            if collection:
+                st.markdown("---")
+                col_c1, col_c2 = st.columns([1, 4])
+                with col_c1:
+                    st.image(collection['poster'], width=180)
+                with col_c2:
+                    st.markdown(f"## {collection['name']}")
+                    st.markdown(f"**Total Movies:** {len(collection['parts'])}")
+                    st.write(collection['overview'])
+
+                st.markdown("### 🎬 Movies in Chronological Order:")
+                parts = collection['parts']
+                
+                COLS_PER_ROW = 5
+                for row_start in range(0, len(parts), COLS_PER_ROW):
+                    row_items = parts[row_start : row_start + COLS_PER_ROW]
+                    cols = st.columns(COLS_PER_ROW)
                     
-                    if st.button("ℹ️ Details", key=f"btn_{item['movie_id']}_{row_start + idx}"):
-                        show_movie_modal(item)
-elif "selected_movie_info" not in st.session_state:
-    st.info("Search for a movie and click 'Get Recommendations' to start exploring!")
+                    for idx, item in enumerate(row_items):
+                        with cols[idx]:
+                            st.image(item['poster'], use_container_width=True)
+                            st.markdown(f'<div class="movie-title">{idx + row_start + 1}. {item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
+                            
+                            if st.button("ℹ️ Details", key=f"btn_coll_{item['movie_id']}_{row_start + idx}"):
+                                show_movie_modal(item)
