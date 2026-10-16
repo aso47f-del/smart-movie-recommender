@@ -173,7 +173,7 @@ def fetch_movie_modal_data(movie_id):
                 if person.get("job") == "Director":
                     director = person.get("name")
                     break
-            cast = c_data.get("cast", [])[:4] # أبرز 4 ممثلين
+            cast = c_data.get("cast", [])[:4]
     except Exception as e:
         print(f"Error fetching modal details: {e}")
         
@@ -279,7 +279,6 @@ def show_movie_modal(item):
         st.markdown("**Overview / Storyline:**")
         st.write(overview)
         
-        # استعراض طاقم التمثيل الرئيسي (Top Cast)
         if cast:
             st.markdown("**👥 Top Cast:**")
             cast_cols = st.columns(len(cast))
@@ -292,7 +291,6 @@ def show_movie_modal(item):
                         st.image(NO_IMAGE_URL, use_container_width=True)
                     st.markdown(f'<div class="cast-name">{actor.get("name")}</div>', unsafe_allow_html=True)
         
-        # عرض منصات البث أونلاين
         st.markdown("**📺 Where to Watch (Streaming):**")
         if providers:
             prov_cols = st.columns(min(len(providers), 4))
@@ -325,14 +323,6 @@ selected_genre = st.sidebar.selectbox(
     "Filter by Genre:",
     ALL_GENRES,
     key="genre_filter_select"
-)
-
-st.sidebar.markdown("---")
-st.sidebar.header("📅 Year Range Filter")
-year_range = st.sidebar.slider(
-    "Release Year:",
-    min_value=1950, max_value=2026, value=(2010, 2026),
-    key="year_range_slider"
 )
 
 # الواجهة الرئيسية باستخدام التبويبات (Tabs)
@@ -392,20 +382,6 @@ with tab1:
 
     if st.session_state.recommendations:
         results = st.session_state.recommendations.copy()
-        
-        # فلترة نطاق سنوات الإنتاج (Release Year Range Filter)
-        filtered_results = []
-        for item in results:
-            y_str = item['year']
-            if y_str.isdigit():
-                y_int = int(y_str)
-                if year_range[0] <= y_int <= year_range[1]:
-                    filtered_results.append(item)
-            else:
-                # إذا كانت السنة غير متوفرة، نقبلها أو نتخطاها حسب الرغبة
-                filtered_results.append(item)
-                
-        results = filtered_results
 
         if sort_option == "Popularity / Match":
             results = sorted(results, key=lambda x: x['match'], reverse=True)
@@ -417,7 +393,7 @@ with tab1:
         results = results[:num_recommendations]
         
         if not results:
-            st.warning(f"⚠️ No recommendations found matching the selected filters and year range ({year_range[0]} - {year_range[1]}).")
+            st.warning(f"⚠️ No recommendations found matching the genre '{selected_genre}'.")
         else:
             COLS_PER_ROW = 5
             for row_start in range(0, len(results), COLS_PER_ROW):
