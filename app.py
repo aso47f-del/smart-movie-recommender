@@ -105,11 +105,14 @@ def search_collection_tmdb(query):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_person_tmdb(query):
+    """البحث عن شخص مع ترتيب النتائج تنازلياً حسب الشعبية لضمان تصدر المشاهير القائمة"""
     url = f"https://api.themoviedb.org/3/search/person?api_key={API_KEY}&query={query}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
-            return res.json().get("results", [])
+            results = res.json().get("results", [])
+            results_sorted = sorted(results, key=lambda x: x.get("popularity", 0), reverse=True)
+            return results_sorted
     except Exception as e:
         print(f"Error searching person: {e}")
     return []
@@ -156,14 +159,13 @@ def get_person_filmography(person_id):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def discover_movies_by_mood(genre_ids, sort_by, page=1):
-    """جلب الأفلام بناءً على المزاج مع دعم نظام الصفحات الحقيقي من API"""
     url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres={genre_ids}&sort_by={sort_by}&page={page}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             data = res.json()
             results = data.get("results", [])
-            total_pages = min(data.get("total_pages", 1), 10) # حد أقصى 10 صفحات لمنع التكرار المفرط
+            total_pages = min(data.get("total_pages", 1), 10)
             movies = []
             for item in results:
                 poster_path = item.get("poster_path")
@@ -557,23 +559,20 @@ with tab2:
                             if st.button("ℹ️ Details", key=f"btn_coll_{item['movie_id']}_{row_start + idx}"):
                                 show_movie_modal(item)
 
-# --- TAB 3: موجه المزاج ومستكشف طاقم العمل (Mood & Cast Hub مع نظام صفحات حقيقي) ---
+# --- TAB 3: موجه المزاج ومستكشف طاقم العمل (Mood & Cast Hub) ---
 with tab3:
     sub_tab1, sub_tab2 = st.tabs(["🎲 Mood-Based Recommender", "🎭 Actor & Director Explorer"])
     
-    # فرع 1: موجه المزاج مع نظام الصفحات (Pagination)
+    # فرع 1: موجه المزاج مع نظام الصفحات
     with sub_tab1:
         st.subheader("How are you feeling today? Choose your mood:")
         selected_mood = st.selectbox("Select Mood:", list(MOOD_OPTIONS.keys()), key="mood_selector")
         
-        # تتبع الصفحة الحالية للمزاج
         if "mood_page" not in st.session_state:
             st.session_state.mood_page = 1
             
-        col_m_btn, col_m_info = st.columns([1, 3])
-        with col_m_btn:
-            if st.button("Find Movies 🎯", type="primary", key="mood_btn"):
-                st.session_state.mood_page = 1
+        if st.button("Find Movies 🎯", type="primary", key="mood_btn"):
+            st.session_state.mood_page = 1
                 
         mood_data = MOOD_OPTIONS[selected_mood]
         mood_movies, total_mood_pages = discover_movies_by_mood(mood_data["genres"], mood_data["sort"], page=st.session_state.mood_page)
@@ -600,7 +599,6 @@ with tab3:
                         if st.button("ℹ️ Details", key=f"btn_mood_{item['movie_id']}_{row_start + idx}"):
                             show_movie_modal(item)
                             
-            # أزرار التنقل بين صفحات المزاج
             st.markdown("")
             p_col1, p_col2, p_col3 = st.columns([1, 2, 1])
             with p_col1:
@@ -616,7 +614,7 @@ with tab3:
                         st.session_state.mood_page += 1
                         st.rerun()
 
-    # فرع 2: مستكشف الممثلين والمخرجين الشامل (مع نظام صفحات للأعمال الكاملة)
+    # فرع 2: مستكشف الممثلين والمخرجين (مع ترتيب شعبي دقيق وقائمة كاملة ونظام صفحات)
     with sub_tab2:
         st.subheader("Explore Actor or Director Filmography")
         person_query = st.text_input("Search for an actor or director (e.g. Christopher Nolan, Leonardo DiCaprio):", "", key="person_search_input")
@@ -625,7 +623,14 @@ with tab3:
         if person_query:
             person_results = search_person_tmdb(person_query)
             if person_results:
-                person_options = {f"{p.get('name')} ({p.get('known_for_department', 'Artist')})": p.get('id') for p in person_results}
+                person_options = {}
+                for p in person_results:
+                    name = p.get('name', 'Unknown')
+                    dept = p.get('known_for_department', 'Artist')
+                    pop = round(p.get('popularity', 0), 1)
+                    display_label = f"{name} ({dept} - Pop: {pop})"
+                    person_options[display_label] = p.get('id')
+                
                 chosen_person = st.selectbox("Select Person:", list(person_options.keys()), key="person_selectbox")
                 selected_person_id = person_options.get(chosen_person)
                 
@@ -670,7 +675,6 @@ with tab3:
                         if st.button("ℹ️ Details", key=f"btn_person_{item['movie_id']}_{global_idx}"):
                             show_movie_modal(item)
                             
-            # أزرار التنقل بين صفحات أعمال الممثل / المخرج
             if total_p_pages > 1:
                 st.markdown("")
                 pp_col1, pp_col2, pp_col3 = st.columns([1, 2, 1])
