@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import random
 
 # 1. إعدادات الصفحة
 st.set_page_config(
@@ -74,7 +73,6 @@ POPULAR_COLLECTIONS = {
     "Toy Story Collection": 10194
 }
 
-# خيارات المزاج السينمائي باللغة الإنجليزية المتناسقة
 MOOD_OPTIONS = {
     "Action & Adventure 🏃‍♂️": {"genres": "28,12", "sort": "popularity.desc"},
     "Mystery & Thriller 🕵️‍♂️": {"genres": "9648,53", "sort": "vote_average.desc"},
@@ -118,7 +116,7 @@ def search_person_tmdb(query):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_person_filmography(person_id):
-    """جلب أعمال الممثل أو المخرج كاملة من خلال دمج Cast و Crew وإزالة التكرار"""
+    """جلب القائمة الكاملة لأعمال الممثل أو المخرج بدون أي قيود"""
     url = f"https://api.themoviedb.org/3/person/{person_id}/movie_credits?api_key={API_KEY}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
@@ -127,7 +125,6 @@ def get_person_filmography(person_id):
             cast_movies = data.get("cast", [])
             crew_movies = data.get("crew", [])
             
-            # دمج القائمتين وتجنب تكرار الفيلم إذا شارك الشخص بأكثر من صفة
             all_movies_dict = {}
             for m in cast_movies + crew_movies:
                 m_id = m.get("id")
@@ -157,14 +154,16 @@ def get_person_filmography(person_id):
         print(f"Error fetching person filmography: {e}")
     return []
 
-def discover_movies_by_mood(genre_ids, sort_by):
-    """جلب أفلام عشوائية ومتجددة بناءً على المزاج باستخدام صفحة عشوائية (Random Page)"""
-    rand_page = random.randint(1, 5)
-    url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres={genre_ids}&sort_by={sort_by}&page={rand_page}&language=en-US"
+@st.cache_data(show_spinner=False, ttl=86400)
+def discover_movies_by_mood(genre_ids, sort_by, page=1):
+    """جلب الأفلام بناءً على المزاج مع دعم نظام الصفحات الحقيقي من API"""
+    url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres={genre_ids}&sort_by={sort_by}&page={page}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
-            results = res.json().get("results", [])
+            data = res.json()
+            results = data.get("results", [])
+            total_pages = min(data.get("total_pages", 1), 10) # حد أقصى 10 صفحات لمنع التكرار المفرط
             movies = []
             for item in results:
                 poster_path = item.get("poster_path")
@@ -181,10 +180,10 @@ def discover_movies_by_mood(genre_ids, sort_by):
                     'year': release_date,
                     'match': int(item.get("popularity", 50)) % 15 + 80
                 })
-            return movies
+            return movies, total_pages
     except Exception as e:
         print(f"Error discovering movies: {e}")
-    return []
+    return [], 1
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_collection_details(collection_id):
@@ -418,7 +417,7 @@ selected_genre = st.sidebar.selectbox(
 
 # الواجهة الرئيسية باستخدام 3 تبويبات (Tabs)
 st.title("🎬 Smart Live Movie & Franchise Hub")
-st.caption("Explore live recommendations, complete franchises, mood-based picks, and actor/director filmographies!")
+st.caption("Explore live recommendations, complete franchises, mood-based picks, and full actor/director filmographies!")
 
 tab1, tab2, tab3 = st.tabs(["🍿 Recommendations", "🎞️ Franchises", "🎲 Mood & Cast Hub"])
 
@@ -558,28 +557,34 @@ with tab2:
                             if st.button("ℹ️ Details", key=f"btn_coll_{item['movie_id']}_{row_start + idx}"):
                                 show_movie_modal(item)
 
-# --- TAB 3: موجه المزاج ومستكشف طاقم العمل (Mood & Cast Hub) ---
+# --- TAB 3: موجه المزاج ومستكشف طاقم العمل (Mood & Cast Hub مع نظام صفحات حقيقي) ---
 with tab3:
     sub_tab1, sub_tab2 = st.tabs(["🎲 Mood-Based Recommender", "🎭 Actor & Director Explorer"])
     
-    # فرع 1: موجه المزاج (مع دعم التجديد والعشوائية)
+    # فرع 1: موجه المزاج مع نظام الصفحات (Pagination)
     with sub_tab1:
         st.subheader("How are you feeling today? Choose your mood:")
         selected_mood = st.selectbox("Select Mood:", list(MOOD_OPTIONS.keys()), key="mood_selector")
         
-        if st.button("Find Movies for this Mood 🎯", type="primary", key="mood_btn"):
-            mood_data = MOOD_OPTIONS[selected_mood]
-            with st.spinner("Finding fresh movies matching your mood..."):
-                mood_movies = discover_movies_by_mood(mood_data["genres"], mood_data["sort"])
-                st.session_state.mood_movies = mood_movies[:10]
+        # تتبع الصفحة الحالية للمزاج
+        if "mood_page" not in st.session_state:
+            st.session_state.mood_page = 1
+            
+        col_m_btn, col_m_info = st.columns([1, 3])
+        with col_m_btn:
+            if st.button("Find Movies 🎯", type="primary", key="mood_btn"):
+                st.session_state.mood_page = 1
                 
-        if "mood_movies" in st.session_state and st.session_state.mood_movies:
+        mood_data = MOOD_OPTIONS[selected_mood]
+        mood_movies, total_mood_pages = discover_movies_by_mood(mood_data["genres"], mood_data["sort"], page=st.session_state.mood_page)
+        
+        if mood_movies:
             st.markdown("---")
-            st.markdown("### 🌟 Recommended for your mood (Click again for new suggestions!):")
-            m_results = st.session_state.mood_movies
+            st.markdown(f"### 🌟 Recommendations (Page {st.session_state.mood_page} of {total_mood_pages})")
+            
             COLS_PER_ROW = 5
-            for row_start in range(0, len(m_results), COLS_PER_ROW):
-                row_items = m_results[row_start : row_start + COLS_PER_ROW]
+            for row_start in range(0, len(mood_movies), COLS_PER_ROW):
+                row_items = mood_movies[row_start : row_start + COLS_PER_ROW]
                 cols = st.columns(COLS_PER_ROW)
                 
                 for idx, item in enumerate(row_items):
@@ -594,8 +599,24 @@ with tab3:
                         )
                         if st.button("ℹ️ Details", key=f"btn_mood_{item['movie_id']}_{row_start + idx}"):
                             show_movie_modal(item)
+                            
+            # أزرار التنقل بين صفحات المزاج
+            st.markdown("")
+            p_col1, p_col2, p_col3 = st.columns([1, 2, 1])
+            with p_col1:
+                if st.session_state.mood_page > 1:
+                    if st.button("⬅️ Previous Page", key="mood_prev"):
+                        st.session_state.mood_page -= 1
+                        st.rerun()
+            with p_col2:
+                st.write(f"Page **{st.session_state.mood_page}** / {total_mood_pages}")
+            with p_col3:
+                if st.session_state.mood_page < total_mood_pages:
+                    if st.button("Next Page ➡️", key="mood_next"):
+                        st.session_state.mood_page += 1
+                        st.rerun()
 
-    # فرع 2: مستكشف الممثلين والمخرجين الشامل (Cast + Crew)
+    # فرع 2: مستكشف الممثلين والمخرجين الشامل (مع نظام صفحات للأعمال الكاملة)
     with sub_tab2:
         st.subheader("Explore Actor or Director Filmography")
         person_query = st.text_input("Search for an actor or director (e.g. Christopher Nolan, Leonardo DiCaprio):", "", key="person_search_input")
@@ -609,28 +630,59 @@ with tab3:
                 selected_person_id = person_options.get(chosen_person)
                 
         if selected_person_id:
-            if st.button("Show Filmography 🎥", type="primary", key="person_btn"):
-                with st.spinner("Fetching full filmography (Cast & Crew)..."):
+            if st.button("Show Full Filmography 🎥", type="primary", key="person_btn"):
+                st.session_state.person_page = 1
+                with st.spinner("Fetching complete filmography (Cast & Crew)..."):
                     st.session_state.person_movies = get_person_filmography(selected_person_id)
                     
         if "person_movies" in st.session_state and st.session_state.person_movies:
             st.markdown("---")
-            st.markdown("### 🎬 Complete Filmography:")
-            p_results = st.session_state.person_movies[:20] # عرض حتى 20 عمل بارز
+            all_p_movies = st.session_state.person_movies
+            total_items = len(all_p_movies)
+            items_per_page = 15
+            total_p_pages = (total_items + items_per_page - 1) // items_per_page
+            
+            if "person_page" not in st.session_state:
+                st.session_state.person_page = 1
+                
+            st.markdown(f"### 🎬 Complete Filmography (Total Works: {total_items}) - Page {st.session_state.person_page} of {total_p_pages}")
+            
+            start_idx = (st.session_state.person_page - 1) * items_per_page
+            end_idx = start_idx + items_per_page
+            page_movies = all_p_movies[start_idx:end_idx]
+            
             COLS_PER_ROW = 5
-            for row_start in range(0, len(p_results), COLS_PER_ROW):
-                row_items = p_results[row_start : row_start + COLS_PER_ROW]
+            for row_start in range(0, len(page_movies), COLS_PER_ROW):
+                row_items = page_movies[row_start : row_start + COLS_PER_ROW]
                 cols = st.columns(COLS_PER_ROW)
                 
                 for idx, item in enumerate(row_items):
+                    global_idx = start_idx + row_start + idx
                     with cols[idx]:
                         st.image(item['poster'], use_container_width=True)
-                        st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="movie-title">{global_idx + 1}. {item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
                         st.markdown(
                             f'<div class="movie-info">'
                             f'<span class="movie-rating">⭐ {item["rating"]}/10</span>'
                             f'</div>', 
-                        unsafe_allow_html=True
+                            unsafe_allow_html=True
                         )
-                        if st.button("ℹ️ Details", key=f"btn_person_{item['movie_id']}_{row_start + idx}"):
+                        if st.button("ℹ️ Details", key=f"btn_person_{item['movie_id']}_{global_idx}"):
                             show_movie_modal(item)
+                            
+            # أزرار التنقل بين صفحات أعمال الممثل / المخرج
+            if total_p_pages > 1:
+                st.markdown("")
+                pp_col1, pp_col2, pp_col3 = st.columns([1, 2, 1])
+                with pp_col1:
+                    if st.session_state.person_page > 1:
+                        if st.button("⬅️ Previous Page", key="person_prev"):
+                            st.session_state.person_page -= 1
+                            st.rerun()
+                with pp_col2:
+                    st.write(f"Page **{st.session_state.person_page}** / {total_p_pages}")
+                with pp_col3:
+                    if st.session_state.person_page < total_p_pages:
+                        if st.button("Next Page ➡️", key="person_next"):
+                            st.session_state.person_page += 1
+                            st.rerun()
