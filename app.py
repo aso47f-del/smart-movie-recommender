@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import random
 
 # 1. إعدادات الصفحة
 st.set_page_config(
@@ -93,6 +94,17 @@ def search_movie_tmdb(query):
     return []
 
 @st.cache_data(show_spinner=False, ttl=86400)
+def get_trending_movies():
+    url = f"https://api.themoviedb.org/3/trending/movie/day?api_key={API_KEY}"
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            return res.json().get("results", [])
+    except Exception as e:
+        print(f"Error fetching trending movies: {e}")
+    return []
+
+@st.cache_data(show_spinner=False, ttl=86400)
 def search_collection_tmdb(query):
     url = f"https://api.themoviedb.org/3/search/collection?api_key={API_KEY}&query={query}&language=en-US"
     try:
@@ -105,7 +117,6 @@ def search_collection_tmdb(query):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_person_tmdb(query):
-    """البحث عن شخص مع ترتيب النتائج تنازلياً حسب الشعبية لضمان تصدر المشاهير القائمة"""
     url = f"https://api.themoviedb.org/3/search/person?api_key={API_KEY}&query={query}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
@@ -119,7 +130,6 @@ def search_person_tmdb(query):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_person_filmography(person_id):
-    """جلب القائمة الكاملة لأعمال الممثل أو المخرج بدون أي قيود"""
     url = f"https://api.themoviedb.org/3/person/{person_id}/movie_credits?api_key={API_KEY}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
@@ -417,6 +427,16 @@ selected_genre = st.sidebar.selectbox(
     key="genre_filter_select"
 )
 
+st.sidebar.markdown("---")
+if st.sidebar.button("Surprise Me! 🎲", use_container_width=True, key="surprise_btn"):
+    trending = get_trending_movies()
+    if trending:
+        rand_movie = random.choice(trending)
+        st.session_state.selected_movie_id = rand_movie.get("id")
+        st.session_state.selected_movie_info = get_movie_details(rand_movie.get("id"))
+        with st.spinner(f'Surprise! Recommending based on "{rand_movie.get("title")}"...'):
+            st.session_state.recommendations = get_recommendations_from_tmdb(rand_movie.get("id"), selected_genre)
+
 # الواجهة الرئيسية باستخدام 3 تبويبات (Tabs)
 st.title("🎬 Smart Live Movie & Franchise Hub")
 st.caption("Explore live recommendations, complete franchises, mood-based picks, and full actor/director filmographies!")
@@ -507,7 +527,7 @@ with tab1:
                         if st.button("ℹ️ Details", key=f"btn_{item['movie_id']}_{row_start + idx}"):
                             show_movie_modal(item)
 
-# --- TAB 2: قسم سلاسل الأفلام (Franchises) ---
+# --- TAB 2: قسم سلاسل الأفلام (Franchises مع تصحيح الاستجابة التلقائية) ---
 with tab2:
     st.subheader("🔍 Explore Movie Franchises & Collections")
     
@@ -614,7 +634,7 @@ with tab3:
                         st.session_state.mood_page += 1
                         st.rerun()
 
-    # فرع 2: مستكشف الممثلين والمخرجين (مع ترتيب شعبي دقيق وقائمة كاملة ونظام صفحات)
+    # فرع 2: مستكشف الممثلين والمخرجين
     with sub_tab2:
         st.subheader("Explore Actor or Director Filmography")
         person_query = st.text_input("Search for an actor or director (e.g. Christopher Nolan, Leonardo DiCaprio):", "", key="person_search_input")
