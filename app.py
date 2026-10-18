@@ -4,7 +4,6 @@ import random
 import time
 import json
 import os
-from streamlit_google_auth import Authenticate
 
 # 1. Page Configuration
 st.set_page_config(
@@ -91,32 +90,24 @@ def save_user_watchlist(email, watchlist):
     except Exception:
         pass
 
-# Initialize Google Authenticator securely
-authenticator = Authenticate(
-    client_id=st.secrets["google_auth"]["client_id"],
-    client_secret=st.secrets["google_auth"]["client_secret"],
-    redirect_uri=st.secrets["google_auth"]["redirect_uri"],
-    cookie_secret=st.secrets.get("cookie_secret", "super_secret_movie_hub_key"),
-    token_key=st.secrets.get("token_key", "google_token")
-)
-
-# Check user authentication status via Google
-check_auth = authenticator.check_auth()
-
-if not check_auth:
+# 4. Built-in Streamlit Google Authentication
+# Configure the Google provider in Streamlit Secrets under [auth].
+if not st.user.is_logged_in:
     st.markdown("<h1 style='text-align: center;'>🎬 Smart Live Movie Hub</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'>Sign in with your Google account to access your personal watchlist and recommendations.</p>", unsafe_allow_html=True)
-    
+    st.markdown(
+        "<p style='text-align: center;'>Sign in with your Google account to access your personal watchlist and recommendations.</p>",
+        unsafe_allow_html=True,
+    )
+
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # Render Google Sign-In button
-        authenticator.login()
+        if st.button("Sign in with Google", type="primary", use_container_width=True):
+            st.login("google")
     st.stop()
 
-# If authenticated successfully, retrieve user info
-user_info = st.session_state.get("user_info", {})
-user_email = user_info.get("email", "user@gmail.com")
-user_name = user_info.get("name", "Movie Fan")
+# Read the authenticated user's information from Streamlit's OIDC user object.
+user_email = st.user.get("email", "user@gmail.com")
+user_name = st.user.get("name", "Movie Fan")
 
 NO_IMAGE_URL = "https://via.placeholder.com/500x750?text=No+Poster+Available"
 
@@ -465,7 +456,7 @@ def show_movie_modal(item, prefix="modal"):
 st.sidebar.markdown(f"👤 **{user_name}**")
 st.sidebar.caption(user_email)
 if st.sidebar.button("Sign Out 🚪", use_container_width=True):
-    authenticator.logout()
+    st.logout()
 
 st.sidebar.markdown("---")
 st.sidebar.header("⚙️ Controls & Filters")
