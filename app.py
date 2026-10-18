@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. CSS Styling for Smooth Transitions, Modern Clean UI & Mobile Responsiveness
+# 2. CSS Styling for Smooth Transitions, Modern Clean UI & Advanced Mobile Responsiveness
 st.markdown("""
     <style>
     @keyframes fadeIn {
@@ -56,16 +56,30 @@ st.markdown("""
         text-overflow: ellipsis;
     }
 
-    /* Mobile Responsiveness Optimizations */
+    /* --- Advanced Mobile Responsiveness Fixes --- */
     @media (max-width: 768px) {
+        body {
+            overflow-x: hidden;
+        }
         .block-container {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-            padding-top: 1.5rem !important;
+            padding-left: 0.8rem !important;
+            padding-right: 0.8rem !important;
+            padding-top: 1rem !important;
+        }
+        /* تحويل صفوف الأعمدة لتصبح عمودين (2 items per row) على الموبايل بدلاً من 5 */
+        div[data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap !important;
+        }
+        div[data-testid="column"] {
+            width: 48% !important;
+            flex: 1 1 48% !important;
+            min-width: 48% !important;
+            margin-bottom: 0.8rem !important;
         }
         div.stButton > button {
-            font-size: 0.8rem;
-            height: 2.4rem;
+            font-size: 0.75rem;
+            height: 2.5rem;
+            padding: 0.2rem;
         }
     }
     </style>
