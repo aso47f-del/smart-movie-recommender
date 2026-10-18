@@ -92,8 +92,8 @@ def save_user_watchlist(email, watchlist):
         pass
 
 # Initialize Google Authenticator
+# Initialize Google Authenticator safely
 authenticator = Authenticate(
-    secret_credentials_path=None,
     client_id=st.secrets["google_auth"]["client_id"],
     client_secret=st.secrets["google_auth"]["client_secret"],
     redirect_uri=st.secrets["google_auth"]["redirect_uri"],
