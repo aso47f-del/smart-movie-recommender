@@ -13,7 +13,6 @@ st.set_page_config(
 # 2. CSS Styling for Clean Modern UI and Clickable Image Cards
 st.markdown("""
     <style>
-    /* Modern Poster Card Hover & Styling */
     div[data-testid="stImage"] img {
         border-radius: 12px;
         transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
@@ -47,11 +46,6 @@ st.markdown("""
         font-weight: 600;
         margin-top: 4px;
         margin-bottom: 4px;
-    }
-    /* Invisible image overlay buttons for smooth clicks */
-    .stButton>button {
-        width: 100%;
-        border-radius: 8px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -91,7 +85,7 @@ MOOD_OPTIONS = {
     "Romance & Drama 💖": {"genres": "10749,18", "sort": "vote_average.desc"}
 }
 
-# --- API Functions with TTL Caching & Error Toasts ---
+# --- API Functions ---
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_movie_tmdb(query):
@@ -351,7 +345,6 @@ def show_movie_modal(item):
         if imdb_id:
             st.markdown(f"[🔗 Open in IMDb](https://www.imdb.com/title/{imdb_id})")
         
-        # Watchlist toggle is inside the modal only
         if "watchlist" not in st.session_state:
             st.session_state.watchlist = []
         
@@ -374,18 +367,19 @@ def show_movie_modal(item):
         st.write(overview)
         
         if cast:
-            st.markdown("**👥 Top Cast (Click image to view actor's works):**")
+            st.markdown("**👥 Top Cast (Click actor name to jump to filmography):**")
             cast_cols = st.columns(len(cast))
             for i, actor in enumerate(cast):
                 with cast_cols[i]:
                     profile_path = actor.get("profile_path")
                     img_url = f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else NO_IMAGE_URL
-                    st.image(img_url, use_container_width=True)
                     
-                    # Direct click button under actor image to view works instantly
-                    if st.button(f"👤 {actor.get('name')}", key=f"actor_direct_btn_{actor.get('id')}_{i}", help="View Filmography"):
+                    # Clicking image or name instantly jumps to Actor Search tab
+                    if st.image(img_url, use_container_width=True):
+                        pass
+                    if st.button(f"👤 {actor.get('name')}", key=f"actor_jump_{actor.get('id')}_{i}"):
                         st.session_state.auto_search_person = actor.get('name')
-                        st.session_state.active_tab = "Search Hub"
+                        st.session_state.active_hub_tab = "Actor & Director Explorer"
                         st.rerun()
         
         st.markdown("**📺 Where to Watch (Streaming):**")
@@ -436,11 +430,11 @@ if st.sidebar.button("Surprise Me! 🎲", use_container_width=True, key="surpris
             st.session_state.recommendations = get_recommendations_from_tmdb(rand_movie.get("id"), selected_genre)
             status.update(label="Surprise movie loaded! 🎉", state="complete", expanded=False)
 
-# Main UI Title & Clean Restructured Tabs
+# Main UI Title & Restructured Tabs
 st.title("🎬 Smart Live Movie & Franchise Hub")
 st.caption("Personalized movie recommendations, mood discovery, global search, and franchises!")
 
-tab1, tab2, tab3 = st.tabs([
+main_tab1, main_tab2, main_tab3 = st.tabs([
     "🍿 Discover & Recommendations", 
     "🔍 Global Search Hub", 
     "❤️ My Watchlist"
@@ -449,130 +443,140 @@ tab1, tab2, tab3 = st.tabs([
 if "watchlist" not in st.session_state:
     st.session_state.watchlist = []
 
-# --- TAB 1: Discover & Recommendations ---
-with tab1:
-    search_query = st.text_input("Search movie to get tailored recommendations:", "Obsession", key="global_search_input")
+# --- TAB 1: Discover & Recommendations (Clean Radio selector to prevent stacking) ---
+with main_tab1:
+    discovery_mode = st.radio(
+        "Choose Discovery Mode:", 
+        ["Movie-based Recommendations 🚀", "Mood-based Discovery 🎲"], 
+        horizontal=True,
+        key="discovery_mode_radio"
+    )
+    
+    st.markdown("---")
+    
+    if discovery_mode == "Movie-based Recommendations 🚀":
+        search_query = st.text_input("Search movie to get tailored recommendations:", "Obsession", key="global_search_input")
 
-    selected_movie_id = None
-    if search_query:
-        search_results = search_movie_tmdb(search_query)
-        if search_results:
-            movie_options = []
-            movie_dict_map = {}
-            for m in search_results:
-                title = m.get("title", "Unknown")
-                year = m.get("release_date", "N/A")[:4]
-                display_name = f"{title} ({year})" if year and year != "N/A" else title
-                movie_options.append(display_name)
-                movie_dict_map[display_name] = m.get("id")
+        selected_movie_id = None
+        if search_query:
+            search_results = search_movie_tmdb(search_query)
+            if search_results:
+                movie_options = []
+                movie_dict_map = {}
+                for m in search_results:
+                    title = m.get("title", "Unknown")
+                    year = m.get("release_date", "N/A")[:4]
+                    display_name = f"{title} ({year})" if year and year != "N/A" else title
+                    movie_options.append(display_name)
+                    movie_dict_map[display_name] = m.get("id")
+                
+                chosen_option = st.selectbox("Select from search results:", movie_options, key="search_results_selectbox")
+                selected_movie_id = movie_dict_map.get(chosen_option)
+                st.session_state.selected_movie_id = selected_movie_id
+
+        if "recommendations" not in st.session_state:
+            st.session_state.recommendations = []
+
+        if st.button("Get Recommendations 🚀", type="primary", key="get_recs_btn") and selected_movie_id:
+            with st.status("Fetching live movie recommendations...", expanded=True) as status:
+                st.write("🔄 Connecting to TMDB database...")
+                time.sleep(0.2)
+                st.session_state.selected_movie_info = get_movie_details(selected_movie_id)
+                st.session_state.recommendations = get_recommendations_from_tmdb(selected_movie_id, selected_genre)
+                status.update(label="Recommendations loaded successfully! 🚀", state="complete", expanded=False)
+
+        if "selected_movie_info" in st.session_state and st.session_state.selected_movie_info:
+            sel_movie = st.session_state.selected_movie_info
+            st.markdown("---")
+            st.subheader("🎯 Selected Movie")
             
-            chosen_option = st.selectbox("Select from search results:", movie_options, key="search_results_selectbox")
-            selected_movie_id = movie_dict_map.get(chosen_option)
-            st.session_state.selected_movie_id = selected_movie_id
+            col_img, col_info = st.columns([1, 4])
+            with col_img:
+                if st.image(sel_movie['poster'], width=180):
+                    pass
+            with col_info:
+                st.markdown(f"### {sel_movie['title']} ({sel_movie['year']})")
+                st.markdown(f"⭐ **Rating:** {sel_movie['rating']}/10")
+                st.write(sel_movie['overview'])
+                if st.button("ℹ️ View Details & Cast", key="btn_selected_details"):
+                    show_movie_modal(sel_movie)
 
-    if "recommendations" not in st.session_state:
-        st.session_state.recommendations = []
+            st.markdown("---")
+            st.subheader("🍿 Recommended Movies (Click poster to open details)")
 
-    if st.button("Get Recommendations 🚀", type="primary", key="get_recs_btn") and selected_movie_id:
-        with st.status("Fetching live movie recommendations...", expanded=True) as status:
-            st.write("🔄 Connecting to TMDB database...")
-            time.sleep(0.2)
-            st.session_state.selected_movie_info = get_movie_details(selected_movie_id)
-            st.session_state.recommendations = get_recommendations_from_tmdb(selected_movie_id, selected_genre)
-            status.update(label="Recommendations loaded successfully! 🚀", state="complete", expanded=False)
+        if st.session_state.recommendations:
+            results = st.session_state.recommendations.copy()
 
-    if "selected_movie_info" in st.session_state and st.session_state.selected_movie_info:
-        sel_movie = st.session_state.selected_movie_info
-        st.markdown("---")
-        st.subheader("🎯 Selected Movie")
-        
-        col_img, col_info = st.columns([1, 4])
-        with col_img:
-            st.image(sel_movie['poster'], width=180)
-        with col_info:
-            st.markdown(f"### {sel_movie['title']} ({sel_movie['year']})")
-            st.markdown(f"⭐ **Rating:** {sel_movie['rating']}/10")
-            st.write(sel_movie['overview'])
-            if st.button("ℹ️ View Details & Cast", key="btn_selected_details"):
-                show_movie_modal(sel_movie)
-
-        st.markdown("---")
-        st.subheader("🍿 Recommended Movies (Click poster to open details)")
-
-    if st.session_state.recommendations:
-        results = st.session_state.recommendations.copy()
-
-        if sort_option == "Popularity / Match":
-            results = sorted(results, key=lambda x: x['match'], reverse=True)
-        elif sort_option == "Highest Rating":
-            results = sorted(results, key=lambda x: x['rating'], reverse=True)
-        elif sort_option == "Release Year (Newest)":
-            results = sorted(results, key=lambda x: x['year'], reverse=True)
+            if sort_option == "Popularity / Match":
+                results = sorted(results, key=lambda x: x['match'], reverse=True)
+            elif sort_option == "Highest Rating":
+                results = sorted(results, key=lambda x: x['rating'], reverse=True)
+            elif sort_option == "Release Year (Newest)":
+                results = sorted(results, key=lambda x: x['year'], reverse=True)
+                
+            results = results[:num_recommendations]
             
-        results = results[:num_recommendations]
+            if not results:
+                st.warning(f"⚠️ No recommendations found matching genre '{selected_genre}'.")
+            else:
+                COLS_PER_ROW = 5
+                for row_start in range(0, len(results), COLS_PER_ROW):
+                    row_items = results[row_start : row_start + COLS_PER_ROW]
+                    cols = st.columns(COLS_PER_ROW)
+                    
+                    for idx, item in enumerate(row_items):
+                        with cols[idx]:
+                            # Clicking poster opens modal directly without extra buttons
+                            if st.image(item['poster'], use_container_width=True):
+                                show_movie_modal(item)
+                            st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
+                            st.markdown(
+                                f'<div class="movie-info">'
+                                f'<span class="movie-rating">⭐ {item["rating"]}/10</span> | '
+                                f'<span class="movie-match">🎯 {item["match"]}%</span>'
+                                f'</div>', 
+                                unsafe_allow_html=True
+                            )
+
+    else:
+        # Mood-based Discovery Section cleanly separated
+        st.subheader("🎲 Mood-Based Movie Finder")
+        selected_mood = st.selectbox("Select Mood:", list(MOOD_OPTIONS.keys()), key="mood_selector")
         
-        if not results:
-            st.warning(f"⚠️ No recommendations found matching genre '{selected_genre}'.")
-        else:
+        if "mood_page" not in st.session_state:
+            st.session_state.mood_page = 1
+            
+        if st.button("Find Movies by Mood 🎯", type="primary", key="mood_btn"):
+            st.session_state.mood_page = 1
+                
+        mood_data = MOOD_OPTIONS[selected_mood]
+        mood_movies, total_mood_pages = discover_movies_by_mood(mood_data["genres"], mood_data["sort"], page=st.session_state.mood_page)
+        
+        if mood_movies:
+            st.markdown(f"### 🌟 Mood Pick Recommendations (Page {st.session_state.mood_page} of {total_mood_pages})")
+            
             COLS_PER_ROW = 5
-            for row_start in range(0, len(results), COLS_PER_ROW):
-                row_items = results[row_start : row_start + COLS_PER_ROW]
+            for row_start in range(0, len(mood_movies), COLS_PER_ROW):
+                row_items = mood_movies[row_start : row_start + COLS_PER_ROW]
                 cols = st.columns(COLS_PER_ROW)
                 
                 for idx, item in enumerate(row_items):
                     with cols[idx]:
-                        st.image(item['poster'], use_container_width=True)
-                        st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
-                        st.markdown(
-                            f'<div class="movie-info">'
-                            f'<span class="movie-rating">⭐ {item["rating"]}/10</span> | '
-                            f'<span class="movie-match">🎯 {item["match"]}%</span>'
-                            f'</div>', 
-                            unsafe_allow_html=True
-                        )
-                        # Poster action button
-                        if st.button("🎬 Details", key=f"poster_click_{item['movie_id']}_{row_start + idx}"):
+                        if st.image(item['poster'], use_container_width=True):
                             show_movie_modal(item)
-
-    st.markdown("---")
-    # Integrated Mood Recommender inside Discover tab
-    st.subheader("🎲 Mood-Based Movie Finder")
-    selected_mood = st.selectbox("Select Mood:", list(MOOD_OPTIONS.keys()), key="mood_selector")
-    
-    if "mood_page" not in st.session_state:
-        st.session_state.mood_page = 1
-        
-    if st.button("Find Movies by Mood 🎯", type="primary", key="mood_btn"):
-        st.session_state.mood_page = 1
-            
-    mood_data = MOOD_OPTIONS[selected_mood]
-    mood_movies, total_mood_pages = discover_movies_by_mood(mood_data["genres"], mood_data["sort"], page=st.session_state.mood_page)
-    
-    if mood_movies:
-        st.markdown(f"### 🌟 Mood Pick Recommendations (Page {st.session_state.mood_page} of {total_mood_pages})")
-        
-        COLS_PER_ROW = 5
-        for row_start in range(0, len(mood_movies), COLS_PER_ROW):
-            row_items = mood_movies[row_start : row_start + COLS_PER_ROW]
-            cols = st.columns(COLS_PER_ROW)
-            
-            for idx, item in enumerate(row_items):
-                with cols[idx]:
-                    st.image(item['poster'], use_container_width=True)
-                    st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                    if st.button("🎬 Details", key=f"btn_mood_{item['movie_id']}_{row_start + idx}"):
-                        show_movie_modal(item)
+                        st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
 
 # --- TAB 2: Global Search Hub ---
-with tab2:
-    search_sub_tab1, search_sub_tab2 = st.tabs(["🎭 Actor & Director Explorer", "🎞️ Franchises & Collections"])
+with main_tab2:
+    # Remember selected hub tab if redirected from actor click
+    default_hub_tab = st.session_state.get('active_hub_tab', "Actor & Director Explorer")
+    search_sub_tab1, search_sub_tab2 = st.tabs(["Actor & Director Explorer", "Franchises & Collections"])
     
     # Branch 1: Actor & Director Search
     with search_sub_tab1:
         st.subheader("Search Actor or Director Filmography")
         
-        # Check if navigated automatically from actor click
         initial_person_query = st.session_state.get('auto_search_person', '')
         person_query = st.text_input("Search for actor or director:", initial_person_query, key="person_search_input")
         
@@ -617,11 +621,10 @@ with tab2:
                 for idx, item in enumerate(row_items):
                     global_idx = start_idx + row_start + idx
                     with cols[idx]:
-                        st.image(item['poster'], use_container_width=True)
+                        if st.image(item['poster'], use_container_width=True):
+                            show_movie_modal(item)
                         st.markdown(f'<div class="movie-title">{global_idx + 1}. {item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
                         st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                        if st.button("🎬 Details", key=f"btn_person_{item['movie_id']}_{global_idx}"):
-                            show_movie_modal(item)
 
     # Branch 2: Franchise & Collections Search
     with search_sub_tab2:
@@ -652,7 +655,8 @@ with tab2:
                     st.markdown("---")
                     col_c1, col_c2 = st.columns([1, 4])
                     with col_c1:
-                        st.image(collection['poster'], width=180)
+                        if st.image(collection['poster'], width=180):
+                            pass
                     with col_c2:
                         st.markdown(f"## {collection['name']}")
                         st.markdown(f"**Total Movies:** {len(collection['parts'])}")
@@ -667,14 +671,13 @@ with tab2:
                         
                         for idx, item in enumerate(row_items):
                             with cols[idx]:
-                                st.image(item['poster'], use_container_width=True)
+                                if st.image(item['poster'], use_container_width=True):
+                                    show_movie_modal(item)
                                 st.markdown(f'<div class="movie-title">{idx + row_start + 1}. {item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
                                 st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                                if st.button("🎬 Details", key=f"btn_coll_{item['movie_id']}_{row_start + idx}"):
-                                    show_movie_modal(item)
 
 # --- TAB 3: My Watchlist ---
-with tab3:
+with main_tab3:
     st.subheader("❤️ Your Personal Watchlist")
     if not st.session_state.watchlist:
         st.info("Your watchlist is currently empty. Open any movie details modal and click 'Add to Watchlist' ❤️!")
@@ -689,12 +692,10 @@ with tab3:
             
             for idx, item in enumerate(row_items):
                 with cols[idx]:
-                    st.image(item['poster'], use_container_width=True)
+                    if st.image(item['poster'], use_container_width=True):
+                        show_movie_modal(item)
                     st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
                     st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                    
-                    if st.button("🎬 Details", key=f"btn_watch_{item['movie_id']}_{row_start + idx}"):
-                        show_movie_modal(item)
         
         st.markdown("---")
         if st.button("🗑️ Clear Entire Watchlist", type="secondary"):
