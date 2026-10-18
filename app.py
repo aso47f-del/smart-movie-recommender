@@ -2,23 +2,24 @@ import streamlit as st
 import requests
 import random
 
-# 1. إعدادات الصفحة
+# 1. Page Configuration
 st.set_page_config(
     page_title="Smart Live Movie & Franchise Hub",
     page_icon="🎬",
     layout="wide"
 )
 
-# 2. تصميم CSS للبطاقات والتنسيق
+# 2. CSS Styling for Cards and Hover Effects
 st.markdown("""
     <style>
     div[data-testid="stImage"] img {
         border-radius: 12px;
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+        cursor: pointer;
     }
     div[data-testid="stImage"] img:hover {
-        transform: scale(1.03);
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        transform: scale(1.04);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
     }
     .movie-title {
         font-weight: 700;
@@ -47,7 +48,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. إدارة مفتاح الـ API بأمان
+# 3. Secure API Key Management
 try:
     API_KEY = st.secrets["TMDB_API_KEY"]
 except Exception:
@@ -82,6 +83,8 @@ MOOD_OPTIONS = {
     "Romance & Drama 💖": {"genres": "10749,18", "sort": "vote_average.desc"}
 }
 
+# --- API Functions with Enhanced Error Handling (st.toast) and TTL (Cache Optimization) ---
+
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_movie_tmdb(query):
     url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={query}&language=en-US"
@@ -90,7 +93,7 @@ def search_movie_tmdb(query):
         if res.status_code == 200:
             return res.json().get("results", [])
     except Exception as e:
-        print(f"Error searching movie: {e}")
+        st.toast(f"⚠️ Connection error during search: {e}", icon="🚨")
     return []
 
 @st.cache_data(show_spinner=False, ttl=86400)
@@ -101,7 +104,7 @@ def get_trending_movies():
         if res.status_code == 200:
             return res.json().get("results", [])
     except Exception as e:
-        print(f"Error fetching trending movies: {e}")
+        st.toast("⚠️ Unable to fetch trending movies at the moment.", icon="⚠️")
     return []
 
 @st.cache_data(show_spinner=False, ttl=86400)
@@ -112,7 +115,7 @@ def search_collection_tmdb(query):
         if res.status_code == 200:
             return res.json().get("results", [])
     except Exception as e:
-        print(f"Error searching collection: {e}")
+        st.toast("⚠️ Error searching for collections.", icon="⚠️")
     return []
 
 @st.cache_data(show_spinner=False, ttl=86400)
@@ -122,49 +125,40 @@ def search_person_tmdb(query):
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             results = res.json().get("results", [])
-            results_sorted = sorted(results, key=lambda x: x.get("popularity", 0), reverse=True)
-            return results_sorted
+            return sorted(results, key=lambda x: x.get("popularity", 0), reverse=True)
     except Exception as e:
-        print(f"Error searching person: {e}")
+        st.toast("⚠️ Error searching for persons.", icon="⚠️")
     return []
 
-@st.cache_data(show_spinner=False, ttl=86400)
+@st.cache_data(show_spinner=False, ttl=604800)
 def get_person_filmography(person_id):
     url = f"https://api.themoviedb.org/3/person/{person_id}/movie_credits?api_key={API_KEY}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             data = res.json()
-            cast_movies = data.get("cast", [])
-            crew_movies = data.get("crew", [])
-            
             all_movies_dict = {}
-            for m in cast_movies + crew_movies:
+            for m in data.get("cast", []) + data.get("crew", []):
                 m_id = m.get("id")
                 if m_id and m_id not in all_movies_dict:
                     all_movies_dict[m_id] = m
                     
-            combined_movies = list(all_movies_dict.values())
-            sorted_movies = sorted(combined_movies, key=lambda x: x.get("popularity", 0), reverse=True)
-            
+            sorted_movies = sorted(list(all_movies_dict.values()), key=lambda x: x.get("popularity", 0), reverse=True)
             formatted_movies = []
             for item in sorted_movies:
                 poster_path = item.get("poster_path")
                 poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else NO_IMAGE_URL
                 raw_rating = item.get("vote_average", 0.0)
-                rating = round(raw_rating, 1) if raw_rating else 0.0
-                release_date = item.get("release_date", "N/A")[:4]
-                
                 formatted_movies.append({
                     'movie_id': item.get("id"),
                     'title': item.get("title"),
                     'poster': poster_url,
-                    'rating': rating,
-                    'year': release_date if release_date else "N/A"
+                    'rating': round(raw_rating, 1) if raw_rating else 0.0,
+                    'year': item.get("release_date", "N/A")[:4]
                 })
             return formatted_movies
     except Exception as e:
-        print(f"Error fetching person filmography: {e}")
+        st.toast("⚠️ Error fetching filmography.", icon="⚠️")
     return []
 
 @st.cache_data(show_spinner=False, ttl=86400)
@@ -181,52 +175,42 @@ def discover_movies_by_mood(genre_ids, sort_by, page=1):
                 poster_path = item.get("poster_path")
                 poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else NO_IMAGE_URL
                 raw_rating = item.get("vote_average", 0.0)
-                rating = round(raw_rating, 1) if raw_rating else 0.0
-                release_date = item.get("release_date", "N/A")[:4]
-                
                 movies.append({
                     'movie_id': item.get("id"),
                     'title': item.get("title"),
                     'poster': poster_url,
-                    'rating': rating,
-                    'year': release_date,
+                    'rating': round(raw_rating, 1) if raw_rating else 0.0,
+                    'year': item.get("release_date", "N/A")[:4],
                     'match': int(item.get("popularity", 50)) % 15 + 80
                 })
             return movies, total_pages
     except Exception as e:
-        print(f"Error discovering movies: {e}")
+        st.toast("⚠️ Error filtering by mood.", icon="⚠️")
     return [], 1
 
-@st.cache_data(show_spinner=False, ttl=86400)
+@st.cache_data(show_spinner=False, ttl=604800)
 def get_collection_details(collection_id):
     url = f"https://api.themoviedb.org/3/collection/{collection_id}?api_key={API_KEY}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             data = res.json()
-            parts = data.get("parts", [])
-            parts_sorted = sorted(parts, key=lambda x: x.get("release_date", "9999") or "9999")
-            
+            parts_sorted = sorted(data.get("parts", []), key=lambda x: x.get("release_date", "9999") or "9999")
             formatted_parts = []
             for item in parts_sorted:
                 poster_path = item.get("poster_path")
                 poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else NO_IMAGE_URL
                 raw_rating = item.get("vote_average", 0.0)
-                rating = round(raw_rating, 1) if raw_rating else 0.0
-                release_date = item.get("release_date", "N/A")[:4]
-                
                 formatted_parts.append({
                     'movie_id': item.get("id"),
                     'title': item.get("title"),
                     'poster': poster_url,
-                    'rating': rating,
-                    'year': release_date,
+                    'rating': round(raw_rating, 1) if raw_rating else 0.0,
+                    'year': item.get("release_date", "N/A")[:4],
                     'overview': item.get("overview", "")
                 })
-                
             poster_path = data.get("poster_path")
             coll_poster = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else NO_IMAGE_URL
-            
             return {
                 'id': data.get("id"),
                 'name': data.get("name"),
@@ -235,22 +219,16 @@ def get_collection_details(collection_id):
                 'parts': formatted_parts
             }
     except Exception as e:
-        print(f"Error fetching collection details: {e}")
+        st.toast("⚠️ Error fetching collection details.", icon="⚠️")
     return None
 
-@st.cache_data(show_spinner=False, ttl=86400)
+@st.cache_data(show_spinner=False, ttl=604800)
 def fetch_movie_modal_data(movie_id):
     info_url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US"
     videos_url = f"https://api.themoviedb.org/3/movie/{movie_id}/videos?api_key={API_KEY}&language=en-US"
     credits_url = f"https://api.themoviedb.org/3/movie/{movie_id}/credits?api_key={API_KEY}&language=en-US"
     
-    overview = "No overview available."
-    runtime = "N/A"
-    imdb_id = None
-    youtube_key = None
-    director = "N/A"
-    cast = []
-    
+    overview, runtime, imdb_id, youtube_key, director, cast = "No overview available.", "N/A", None, None, "N/A", []
     try:
         res_info = requests.get(info_url, timeout=5)
         if res_info.status_code == 200:
@@ -261,8 +239,7 @@ def fetch_movie_modal_data(movie_id):
             
         res_vid = requests.get(videos_url, timeout=5)
         if res_vid.status_code == 200:
-            results = res_vid.json().get("results", [])
-            for vid in results:
+            for vid in res_vid.json().get("results", []):
                 if vid.get("site") == "YouTube" and vid.get("type") in ["Trailer", "Teaser"]:
                     youtube_key = vid.get("key")
                     break
@@ -270,15 +247,13 @@ def fetch_movie_modal_data(movie_id):
         res_credits = requests.get(credits_url, timeout=5)
         if res_credits.status_code == 200:
             c_data = res_credits.json()
-            crew = c_data.get("crew", [])
-            for person in crew:
+            for person in c_data.get("crew", []):
                 if person.get("job") == "Director":
                     director = person.get("name")
                     break
             cast = c_data.get("cast", [])[:4]
     except Exception as e:
-        print(f"Error fetching modal details: {e}")
-        
+        st.toast("⚠️ Error fetching movie details.", icon="⚠️")
     return overview, runtime, imdb_id, youtube_key, director, cast
 
 @st.cache_data(show_spinner=False, ttl=86400)
@@ -291,11 +266,11 @@ def get_movie_watch_providers(movie_id):
             for country in ['US', 'EG', 'GB', 'FR']:
                 if country in data and 'flatrate' in data[country]:
                     return data[country]['flatrate']
-    except Exception as e:
-        print(f"Error fetching watch providers: {e}")
+    except Exception:
+        pass
     return []
 
-@st.cache_data(show_spinner=False, ttl=86400)
+@st.cache_data(show_spinner=False, ttl=604800)
 def get_movie_details(movie_id):
     url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US"
     try:
@@ -305,18 +280,16 @@ def get_movie_details(movie_id):
             poster_path = data.get("poster_path")
             poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else NO_IMAGE_URL
             raw_rating = data.get("vote_average", 0.0)
-            rating = round(raw_rating, 1) if raw_rating else 0.0
-            release_date = data.get("release_date", "N/A")[:4]
             return {
                 'movie_id': data.get("id"),
                 'title': data.get("title"),
                 'poster': poster_url,
-                'rating': rating,
-                'year': release_date,
+                'rating': round(raw_rating, 1) if raw_rating else 0.0,
+                'year': data.get("release_date", "N/A")[:4],
                 'overview': data.get("overview", "")
             }
     except Exception as e:
-        print(f"Error fetching selected movie details: {e}")
+        st.toast("⚠️ Error fetching movie info.", icon="⚠️")
     return None
 
 @st.cache_data(show_spinner=False, ttl=86400)
@@ -328,7 +301,6 @@ def get_recommendations_from_tmdb(movie_id, genre_filter="All"):
         "Mystery": 9648, "Romance": 10749, "Science Fiction": 878, 
         "TV Movie": 10770, "Thriller": 53, "War": 10752, "Western": 37
     }
-    
     url = f"https://api.themoviedb.org/3/movie/{movie_id}/recommendations?api_key={API_KEY}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
@@ -338,29 +310,25 @@ def get_recommendations_from_tmdb(movie_id, genre_filter="All"):
             target_genre_id = genre_mapping.get(genre_filter) if genre_filter != "All" else None
             
             for item in results:
-                genre_ids = item.get("genre_ids", [])
-                if target_genre_id and target_genre_id not in genre_ids:
+                if target_genre_id and target_genre_id not in item.get("genre_ids", []):
                     continue
-                    
                 poster_path = item.get("poster_path")
                 poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else NO_IMAGE_URL
                 raw_rating = item.get("vote_average", 0.0)
-                rating = round(raw_rating, 1) if raw_rating else 0.0
-                release_date = item.get("release_date", "N/A")[:4]
-                
                 recommendations.append({
                     'movie_id': item.get("id"),
                     'title': item.get("title"),
                     'poster': poster_url,
-                    'rating': rating,
-                    'year': release_date,
+                    'rating': round(raw_rating, 1) if raw_rating else 0.0,
+                    'year': item.get("release_date", "N/A")[:4],
                     'match': int(item.get("popularity", 50)) % 15 + 80
                 })
             return recommendations
     except Exception as e:
-        print(f"Error fetching recommendations: {e}")
+        st.toast("⚠️ Error fetching recommendations.", icon="⚠️")
     return []
 
+# Movie Details Dialog Modal
 @st.dialog("🎬 Movie Details, Cast & Trailer", width="large")
 def show_movie_modal(item):
     overview, runtime, imdb_id, youtube_key, director, cast = fetch_movie_modal_data(item['movie_id'])
@@ -374,6 +342,21 @@ def show_movie_modal(item):
         st.markdown(f"**Rating:** ⭐ {item['rating']}/10")
         if imdb_id:
             st.markdown(f"[🔗 Open in IMDb](https://www.imdb.com/title/{imdb_id})")
+        
+        if "watchlist" not in st.session_state:
+            st.session_state.watchlist = []
+        
+        is_in_watchlist = any(m['movie_id'] == item['movie_id'] for m in st.session_state.watchlist)
+        if not is_in_watchlist:
+            if st.button("❤️ Add to Watchlist", key=f"modal_add_{item['movie_id']}"):
+                st.session_state.watchlist.append(item)
+                st.toast("Added to watchlist successfully! ❤️", icon="✅")
+                st.rerun()
+        else:
+            if st.button("❌ Remove from Watchlist", key=f"modal_rem_{item['movie_id']}"):
+                st.session_state.watchlist = [m for m in st.session_state.watchlist if m['movie_id'] != item['movie_id']]
+                st.toast("Removed from watchlist.", icon="🗑️")
+                st.rerun()
         
     with col2:
         st.subheader(f"{item['title']} ({item['year']})")
@@ -411,7 +394,7 @@ def show_movie_modal(item):
         else:
             st.info("No trailer video available for this movie.")
 
-# الشريط الجانبي (Sidebar)
+# Sidebar Controls & Filters
 st.sidebar.header("⚙️ Controls & Filters")
 num_recommendations = st.sidebar.slider("Number of Movies:", min_value=3, max_value=20, value=6, key="num_movies_slider")
 
@@ -437,13 +420,16 @@ if st.sidebar.button("Surprise Me! 🎲", use_container_width=True, key="surpris
         with st.spinner(f'Surprise! Recommending based on "{rand_movie.get("title")}"...'):
             st.session_state.recommendations = get_recommendations_from_tmdb(rand_movie.get("id"), selected_genre)
 
-# الواجهة الرئيسية باستخدام 3 تبويبات (Tabs)
+# Main UI & Tabs Including Watchlist
 st.title("🎬 Smart Live Movie & Franchise Hub")
-st.caption("Explore live recommendations, complete franchises, mood-based picks, and full actor/director filmographies!")
+st.caption("Explore live recommendations, complete franchises, mood-based picks, and your personal Watchlist!")
 
-tab1, tab2, tab3 = st.tabs(["🍿 Recommendations", "🎞️ Franchises", "🎲 Mood & Cast Hub"])
+tab1, tab2, tab3, tab4 = st.tabs(["🍿 Recommendations", "🎞️ Franchises", "🎲 Mood & Cast Hub", "❤️ Watchlist"])
 
-# --- TAB 1: التوصيات العادية ---
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = []
+
+# --- TAB 1: Recommendations ---
 with tab1:
     search_query = st.text_input("Search for any movie globally:", "Obsession", key="global_search_input")
 
@@ -453,12 +439,10 @@ with tab1:
         if search_results:
             movie_options = []
             movie_dict_map = {}
-            
             for m in search_results:
                 title = m.get("title", "Unknown")
                 year = m.get("release_date", "N/A")[:4]
                 display_name = f"{title} ({year})" if year and year != "N/A" else title
-                
                 movie_options.append(display_name)
                 movie_dict_map[display_name] = m.get("id")
             
@@ -524,35 +508,34 @@ with tab1:
                             unsafe_allow_html=True
                         )
                         
-                        if st.button("ℹ️ Details", key=f"btn_{item['movie_id']}_{row_start + idx}"):
-                            show_movie_modal(item)
+                        col_btn1, col_btn2 = st.columns(2)
+                        with col_btn1:
+                            if st.button("ℹ️", key=f"btn_{item['movie_id']}_{row_start + idx}", help="View Details"):
+                                show_movie_modal(item)
+                        with col_btn2:
+                            is_fav = any(m['movie_id'] == item['movie_id'] for m in st.session_state.watchlist)
+                            if not is_fav:
+                                if st.button("❤️", key=f"fav_{item['movie_id']}_{row_start + idx}", help="Add to Watchlist"):
+                                    st.session_state.watchlist.append(item)
+                                    st.toast(f"Added {item['title']} to Watchlist!", icon="❤️")
+                                    st.rerun()
+                            else:
+                                if st.button("❌", key=f"unfav_{item['movie_id']}_{row_start + idx}", help="Remove from Watchlist"):
+                                    st.session_state.watchlist = [m for m in st.session_state.watchlist if m['movie_id'] != item['movie_id']]
+                                    st.toast(f"Removed {item['title']} from Watchlist.", icon="🗑️")
+                                    st.rerun()
 
-# --- TAB 2: قسم سلاسل الأفلام (Franchises مع استخدام Radio لتجنب التداخل) ---
+# --- TAB 2: Franchises ---
 with tab2:
     st.subheader("🔍 Explore Movie Franchises & Collections")
-    
-    search_mode = st.radio(
-        "Choose how to explore:", 
-        ["Popular Franchises ⭐", "Search Any Franchise 🔍"], 
-        horizontal=True,
-        key="franchise_mode_radio"
-    )
+    search_mode = st.radio("Choose how to explore:", ["Popular Franchises ⭐", "Search Any Franchise 🔍"], horizontal=True, key="franchise_mode_radio")
     
     selected_coll_id = None
-    
     if search_mode == "Popular Franchises ⭐":
-        preset_choice = st.selectbox(
-            "Select a Popular Franchise:", 
-            list(POPULAR_COLLECTIONS.keys()), 
-            key="preset_franchise_sel"
-        )
+        preset_choice = st.selectbox("Select a Popular Franchise:", list(POPULAR_COLLECTIONS.keys()), key="preset_franchise_sel")
         selected_coll_id = POPULAR_COLLECTIONS.get(preset_choice)
     else:
-        franchise_query = st.text_input(
-            "Search for any Franchise / Collection (e.g., Batman, Star Wars):", 
-            "", 
-            key="franchise_search_input"
-        )
+        franchise_query = st.text_input("Search for any Franchise / Collection:", "", key="franchise_search_input")
         if franchise_query:
             coll_results = search_collection_tmdb(franchise_query)
             if coll_results:
@@ -563,7 +546,6 @@ with tab2:
     if selected_coll_id:
         with st.spinner("Fetching full franchise chronologically..."):
             collection = get_collection_details(selected_coll_id)
-            
             if collection:
                 st.markdown("---")
                 col_c1, col_c2 = st.columns([1, 4])
@@ -576,7 +558,6 @@ with tab2:
 
                 st.markdown("### 🎬 Movies in Chronological Order:")
                 parts = collection['parts']
-                
                 COLS_PER_ROW = 5
                 for row_start in range(0, len(parts), COLS_PER_ROW):
                     row_items = parts[row_start : row_start + COLS_PER_ROW]
@@ -588,14 +569,27 @@ with tab2:
                             st.markdown(f'<div class="movie-title">{idx + row_start + 1}. {item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
                             st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
                             
-                            if st.button("ℹ️ Details", key=f"btn_coll_{item['movie_id']}_{row_start + idx}"):
-                                show_movie_modal(item)
+                            col_b1, col_b2 = st.columns(2)
+                            with col_b1:
+                                if st.button("ℹ️", key=f"btn_coll_{item['movie_id']}_{row_start + idx}"):
+                                    show_movie_modal(item)
+                            with col_b2:
+                                is_fav = any(m['movie_id'] == item['movie_id'] for m in st.session_state.watchlist)
+                                if not is_fav:
+                                    if st.button("❤️", key=f"fav_coll_{item['movie_id']}_{row_start + idx}"):
+                                        st.session_state.watchlist.append(item)
+                                        st.toast("Added to Watchlist!", icon="❤️")
+                                        st.rerun()
+                                else:
+                                    if st.button("❌", key=f"unfav_coll_{item['movie_id']}_{row_start + idx}"):
+                                        st.session_state.watchlist = [m for m in st.session_state.watchlist if m['movie_id'] != item['movie_id']]
+                                        st.toast("Removed from Watchlist.", icon="🗑️")
+                                        st.rerun()
 
-# --- TAB 3: موجه المزاج ومستكشف طاقم العمل (Mood & Cast Hub) ---
+# --- TAB 3: Mood & Cast Hub ---
 with tab3:
     sub_tab1, sub_tab2 = st.tabs(["🎲 Mood-Based Recommender", "🎭 Actor & Director Explorer"])
     
-    # فرع 1: موجه المزاج مع نظام الصفحات
     with sub_tab1:
         st.subheader("How are you feeling today? Choose your mood:")
         selected_mood = st.selectbox("Select Mood:", list(MOOD_OPTIONS.keys()), key="mood_selector")
@@ -622,14 +616,24 @@ with tab3:
                     with cols[idx]:
                         st.image(item['poster'], use_container_width=True)
                         st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
-                        st.markdown(
-                            f'<div class="movie-info">'
-                            f'<span class="movie-rating">⭐ {item["rating"]}/10</span>'
-                            f'</div>', 
-                            unsafe_allow_html=True
-                        )
-                        if st.button("ℹ️ Details", key=f"btn_mood_{item['movie_id']}_{row_start + idx}"):
-                            show_movie_modal(item)
+                        st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
+                        
+                        col_b1, col_b2 = st.columns(2)
+                        with col_b1:
+                            if st.button("ℹ️", key=f"btn_mood_{item['movie_id']}_{row_start + idx}"):
+                                show_movie_modal(item)
+                        with col_b2:
+                            is_fav = any(m['movie_id'] == item['movie_id'] for m in st.session_state.watchlist)
+                            if not is_fav:
+                                if st.button("❤️", key=f"fav_mood_{item['movie_id']}_{row_start + idx}"):
+                                    st.session_state.watchlist.append(item)
+                                    st.toast("Added to Watchlist!", icon="❤️")
+                                    st.rerun()
+                            else:
+                                if st.button("❌", key=f"unfav_mood_{item['movie_id']}_{row_start + idx}"):
+                                    st.session_state.watchlist = [m for m in st.session_state.watchlist if m['movie_id'] != item['movie_id']]
+                                    st.toast("Removed from Watchlist.", icon="🗑️")
+                                    st.rerun()
                             
             st.markdown("")
             p_col1, p_col2, p_col3 = st.columns([1, 2, 1])
@@ -646,30 +650,22 @@ with tab3:
                         st.session_state.mood_page += 1
                         st.rerun()
 
-    # فرع 2: مستكشف الممثلين والمخرجين
     with sub_tab2:
         st.subheader("Explore Actor or Director Filmography")
-        person_query = st.text_input("Search for an actor or director (e.g. Christopher Nolan, Leonardo DiCaprio):", "", key="person_search_input")
+        person_query = st.text_input("Search for an actor or director:", "", key="person_search_input")
         
         selected_person_id = None
         if person_query:
             person_results = search_person_tmdb(person_query)
             if person_results:
-                person_options = {}
-                for p in person_results:
-                    name = p.get('name', 'Unknown')
-                    dept = p.get('known_for_department', 'Artist')
-                    pop = round(p.get('popularity', 0), 1)
-                    display_label = f"{name} ({dept} - Pop: {pop})"
-                    person_options[display_label] = p.get('id')
-                
+                person_options = {f"{p.get('name')} ({p.get('known_for_department', 'Artist')} - Pop: {round(p.get('popularity', 0), 1)})": p.get('id') for p in person_results}
                 chosen_person = st.selectbox("Select Person:", list(person_options.keys()), key="person_selectbox")
                 selected_person_id = person_options.get(chosen_person)
                 
         if selected_person_id:
             if st.button("Show Full Filmography 🎥", type="primary", key="person_btn"):
                 st.session_state.person_page = 1
-                with st.spinner("Fetching complete filmography (Cast & Crew)..."):
+                with st.spinner("Fetching complete filmography..."):
                     st.session_state.person_movies = get_person_filmography(selected_person_id)
                     
         if "person_movies" in st.session_state and st.session_state.person_movies:
@@ -685,8 +681,7 @@ with tab3:
             st.markdown(f"### 🎬 Complete Filmography (Total Works: {total_items}) - Page {st.session_state.person_page} of {total_p_pages}")
             
             start_idx = (st.session_state.person_page - 1) * items_per_page
-            end_idx = start_idx + items_per_page
-            page_movies = all_p_movies[start_idx:end_idx]
+            page_movies = all_p_movies[start_idx:start_idx + items_per_page]
             
             COLS_PER_ROW = 5
             for row_start in range(0, len(page_movies), COLS_PER_ROW):
@@ -698,27 +693,56 @@ with tab3:
                     with cols[idx]:
                         st.image(item['poster'], use_container_width=True)
                         st.markdown(f'<div class="movie-title">{global_idx + 1}. {item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
-                        st.markdown(
-                            f'<div class="movie-info">'
-                            f'<span class="movie-rating">⭐ {item["rating"]}/10</span>'
-                            f'</div>', 
-                            unsafe_allow_html=True
-                        )
-                        if st.button("ℹ️ Details", key=f"btn_person_{item['movie_id']}_{global_idx}"):
+                        st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
+                        
+                        col_b1, col_b2 = st.columns(2)
+                        with col_b1:
+                            if st.button("ℹ️", key=f"btn_person_{item['movie_id']}_{global_idx}"):
+                                show_movie_modal(item)
+                        with col_b2:
+                            is_fav = any(m['movie_id'] == item['movie_id'] for m in st.session_state.watchlist)
+                            if not is_fav:
+                                if st.button("❤️", key=f"fav_person_{item['movie_id']}_{global_idx}"):
+                                    st.session_state.watchlist.append(item)
+                                    st.toast("Added to Watchlist!", icon="❤️")
+                                    st.rerun()
+                            else:
+                                if st.button("❌", key=f"unfav_person_{item['movie_id']}_{global_idx}"):
+                                    st.session_state.watchlist = [m for m in st.session_state.watchlist if m['movie_id'] != item['movie_id']]
+                                    st.toast("Removed from Watchlist.", icon="🗑️")
+                                    st.rerun()
+
+# --- TAB 4: Watchlist ---
+with tab4:
+    st.subheader("❤️ Your Personal Watchlist")
+    if not st.session_state.watchlist:
+        st.info("Your watchlist is currently empty. Start adding movies by clicking the heart icon ❤️ next to any movie!")
+    else:
+        st.markdown(f"You have **{len(st.session_state.watchlist)}** movies in your watchlist:")
+        
+        COLS_PER_ROW = 5
+        watchlist_items = st.session_state.watchlist
+        for row_start in range(0, len(watchlist_items), COLS_PER_ROW):
+            row_items = watchlist_items[row_start : row_start + COLS_PER_ROW]
+            cols = st.columns(COLS_PER_ROW)
+            
+            for idx, item in enumerate(row_items):
+                with cols[idx]:
+                    st.image(item['poster'], use_container_width=True)
+                    st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
+                    
+                    col_b1, col_b2 = st.columns(2)
+                    with col_b1:
+                        if st.button("ℹ️", key=f"btn_watch_{item['movie_id']}_{row_start + idx}"):
                             show_movie_modal(item)
-                            
-            if total_p_pages > 1:
-                st.markdown("")
-                pp_col1, pp_col2, pp_col3 = st.columns([1, 2, 1])
-                with pp_col1:
-                    if st.session_state.person_page > 1:
-                        if st.button("⬅️ Previous Page", key="person_prev"):
-                            st.session_state.person_page -= 1
+                    with col_b2:
+                        if st.button("❌", key=f"rem_watch_{item['movie_id']}_{row_start + idx}", help="Remove from list"):
+                            st.session_state.watchlist = [m for m in st.session_state.watchlist if m['movie_id'] != item['movie_id']]
+                            st.toast("Removed movie from watchlist.", icon="🗑️")
                             st.rerun()
-                with pp_col2:
-                    st.write(f"Page **{st.session_state.person_page}** / {total_p_pages}")
-                with pp_col3:
-                    if st.session_state.person_page < total_p_pages:
-                        if st.button("Next Page ➡️", key="person_next"):
-                            st.session_state.person_page += 1
-                            st.rerun()
+        
+        if st.button("🗑️ Clear Entire Watchlist", type="secondary"):
+            st.session_state.watchlist = []
+            st.toast("Watchlist cleared successfully.", icon="🧹")
+            st.rerun()
