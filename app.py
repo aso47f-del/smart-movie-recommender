@@ -49,11 +49,17 @@ st.markdown("""
     .stApp { background: #0b0b0f; }
     .movie-section-title { font-size: 1.45rem; font-weight: 800; margin: 1.2rem 0 .35rem; }
     .home-subtitle { color: #b8b8c4; margin-top: -.5rem; }
+    .movie-section-title { border-left: 4px solid #f5c518; padding-left: .65rem; }
     div[data-testid="stHorizontalBlock"] { gap: 1rem; }
     .top-brand { font-size: 1.35rem; font-weight: 900; letter-spacing: -.4px; }
     .top-brand span { color: #f5c518; }
     div.stButton > button[kind="secondary"] { background: #19191f; border: 1px solid #35353d; }
-    
+    [data-testid="stCaptionContainer"] { color: #b8b8c4; }
+    @media (max-width: 760px) {
+        .block-container { padding-left: .7rem; padding-right: .7rem; }
+        .movie-section-title { font-size: 1.1rem; }
+        div[data-testid="stHorizontalBlock"] { gap: .35rem; }
+    }
     
     div.stButton > button {
         width: 100%;
@@ -75,28 +81,89 @@ except Exception:
     st.error("Please configure TMDB_API_KEY in Streamlit secrets.")
     st.stop()
 
-# Helper Functions for Persistent Watchlist per Google User Email
+# Optional persistent storage for hosted deployments.
+# Keep the Supabase service-role key in Streamlit secrets only; never commit it to source control.
+try:
+    SUPABASE_URL = str(st.secrets.get("SUPABASE_URL", "")).rstrip("/")
+    SUPABASE_SERVICE_ROLE_KEY = str(st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", ""))
+except Exception:
+    SUPABASE_URL = ""
+    SUPABASE_SERVICE_ROLE_KEY = ""
+
+
+def supabase_storage_enabled():
+    return bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)
+
+
+def supabase_headers():
+    return {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Content-Type": "application/json",
+    }
+
+# Local JSON fallback is useful for development. Hosted deployments should configure Supabase.
 def get_watchlist_filename(email):
     safe_email = "".join([c if c.isalnum() else "_" for c in email])
     return f"watchlist_{safe_email}.json"
 
 def load_user_watchlist(email):
+    if supabase_storage_enabled():
+        try:
+            response = requests.get(
+                f"{SUPABASE_URL}/rest/v1/movie_watchlists",
+                params={"user_email": f"eq.{email}", "select": "items", "limit": "1"},
+                headers=supabase_headers(), timeout=8,
+            )
+            response.raise_for_status()
+            rows = response.json()
+            if rows:
+                items = rows[0].get("items", [])
+                return items if isinstance(items, list) else []
+            return []
+        except Exception as exc:
+            st.warning(f"Could not load your cloud Watchlist right now: {exc}")
+            return []
     filename = get_watchlist_filename(email)
     if os.path.exists(filename):
         try:
             with open(filename, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                return data if isinstance(data, list) else []
         except Exception:
             return []
     return []
 
 def save_user_watchlist(email, watchlist):
+    if supabase_storage_enabled():
+        try:
+            response = requests.post(
+                f"{SUPABASE_URL}/rest/v1/movie_watchlists",
+                params={"on_conflict": "user_email"},
+                headers={**supabase_headers(), "Prefer": "resolution=merge-duplicates,return=minimal"},
+                json={"user_email": email, "items": watchlist}, timeout=8,
+            )
+            response.raise_for_status()
+            return True
+        except Exception as exc:
+            st.warning(f"Could not save your cloud Watchlist right now: {exc}")
+            return False
     filename = get_watchlist_filename(email)
     try:
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(watchlist, f, ensure_ascii=False, indent=4)
+        return True
     except Exception:
-        pass
+        st.warning("Could not save the Watchlist locally. On hosted deployments, configure Supabase for reliable persistence.")
+        return False
+
+def normalize_watchlist_item(item):
+    """Keep older watchlist entries compatible with the newer tracker fields."""
+    normalized = dict(item)
+    normalized.setdefault("status", "Want to Watch")
+    normalized.setdefault("personal_rating", 0)
+    normalized.setdefault("note", "")
+    return normalized
 
 # 4. Optional Google Authentication
 # Visitors can browse without signing in. Google login is only needed for an account-based watchlist.
@@ -129,6 +196,12 @@ POPULAR_COLLECTIONS = {
     "The Dark Knight Trilogy": 263,
     "Harry Potter Collection": 1241,
     "The Lord of the Rings Collection": 119,
+    "Star Wars Collection": 10,
+    "Jurassic Park Collection": 328,
+    "Fast & Furious Collection": 9485,
+    "Pirates of the Caribbean Collection": 295,
+    "X-Men Collection": 748,
+    "Transformers Collection": 8650,
     "Mission: Impossible Collection": 87096,
     "The Avengers Collection": 86311,
     "The Godfather Collection": 230,
@@ -136,11 +209,13 @@ POPULAR_COLLECTIONS = {
 }
 
 MOOD_OPTIONS = {
-    "Action & Adventure 🏃‍♂️": {"genres": "28,12", "sort": "popularity.desc"},
-    "Mystery & Thriller 🕵️‍♂️": {"genres": "9648,53", "sort": "vote_average.desc"},
-    "Family & Animation 🍿": {"genres": "10751,16", "sort": "popularity.desc"},
-    "Horror 👻": {"genres": "27", "sort": "popularity.desc"},
-    "Romance & Drama 💖": {"genres": "10749,18", "sort": "vote_average.desc"}
+    "Adrenaline & Adventure 🏃‍♂️": {"genres": "28,12", "sort": "popularity.desc"},
+    "Mystery & Psychological 🧠": {"genres": "9648,53", "sort": "vote_average.desc"},
+    "Scared / Horror 👻": {"genres": "27", "sort": "popularity.desc"},
+    "Feel-good & Comedy 😄": {"genres": "35,10751", "sort": "popularity.desc"},
+    "Romance & Drama 💖": {"genres": "10749,18", "sort": "vote_average.desc"},
+    "Sci-Fi & Fantasy 🚀": {"genres": "878,14", "sort": "popularity.desc"},
+    "Animation & Family 🍿": {"genres": "16,10751", "sort": "vote_average.desc"}
 }
 
 # --- API Functions with Optimized Caching TTL ---
@@ -235,7 +310,7 @@ def get_person_filmography(person_id):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def discover_movies_by_mood(genre_ids, sort_by, page=1):
-    url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres={genre_ids}&sort_by={sort_by}&page={page}&language=en-US"
+    url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres={genre_ids}&sort_by={sort_by}&page={page}&language=en-US&vote_count.gte=100&vote_average.gte=5.5"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
@@ -335,7 +410,7 @@ def get_movie_watch_providers(movie_id):
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             data = res.json().get("results", {})
-            for country in ['US', 'EG', 'GB', 'FR']:
+            for country in ['EG', 'GB', 'FR', 'US']:
                 if country in data and 'flatrate' in data[country]:
                     return data[country]['flatrate']
     except Exception:
@@ -438,10 +513,17 @@ def get_home_movies(section, page=1):
     return []
 
 def render_home_carousel(section, title, page_key):
-    movies = get_home_movies(section, st.session_state.get(page_key, 1))
+    raw_movies = get_home_movies(section, st.session_state.get(page_key, 1))
+    seen_ids = set()
+    movies = []
+    for movie in raw_movies:
+        movie_id = movie.get("movie_id")
+        if movie_id and movie_id not in seen_ids:
+            seen_ids.add(movie_id)
+            movies.append(movie)
     st.markdown(f'<div class="movie-section-title">{title}</div>', unsafe_allow_html=True)
     if not movies:
-        st.caption("Movies could not be loaded right now. Please check your TMDB API key or internet connection.")
+        st.info("This row could not load right now. Check the TMDB API key and connection, then try again.")
         return
     offset_key = f"{page_key}_offset"
     offset = st.session_state.get(offset_key, 0)
@@ -483,12 +565,14 @@ def show_movie_modal(item, prefix="modal"):
             st.markdown(f"[🔗 Open in IMDb](https://www.imdb.com/title/{imdb_id})")
         
         if "watchlist" not in st.session_state:
-            st.session_state.watchlist = load_user_watchlist(watchlist_owner) if is_logged_in else []
+            st.session_state.watchlist = [normalize_watchlist_item(m) for m in load_user_watchlist(watchlist_owner)] if is_logged_in else []
         
         is_in_watchlist = any(m['movie_id'] == item['movie_id'] for m in st.session_state.watchlist)
         if not is_in_watchlist:
             if st.button("❤️ Add to Watchlist", key=f"{prefix}_add_{item['movie_id']}"):
-                st.session_state.watchlist.append(item)
+                watch_item = normalize_watchlist_item(item)
+                if not any(m.get("movie_id") == watch_item.get("movie_id") for m in st.session_state.watchlist):
+                    st.session_state.watchlist.append(watch_item)
                 if is_logged_in:
                     save_user_watchlist(watchlist_owner, st.session_state.watchlist)
                     st.toast("Added to your saved Watchlist! ❤️", icon="✅")
@@ -561,6 +645,7 @@ with nav_home:
     if st.button("🎬 Smart Movie", use_container_width=True, key="top_home"):
         st.session_state.main_nav_tab = "🏠 Home"
         st.session_state.top_menu_select = "Home"
+        st.session_state.last_top_menu_choice = "Home"
         st.rerun()
 with nav_watch:
     if st.button("♡ Watchlist", use_container_width=True, key="top_watchlist"):
@@ -570,16 +655,31 @@ with nav_watch:
         st.rerun()
 with nav_search:
     with st.form("top_movie_search_form", clear_on_submit=False):
-        qcol, bcol = st.columns([4, 1])
+        kind_col, qcol, bcol = st.columns([1.35, 3.2, 0.7])
+        with kind_col:
+            top_search_type = st.selectbox("Search type", ["Movies", "People", "Franchises"], key="top_search_type", label_visibility="collapsed")
         with qcol:
-            top_search_query = st.text_input("Search movies", placeholder="Search movies…", label_visibility="collapsed", key="top_search_query")
+            top_search_query = st.text_input("Search", placeholder="Movie, person, franchise…", label_visibility="collapsed", key="top_search_query")
         with bcol:
             search_submitted = st.form_submit_button("🔎", use_container_width=True)
         if search_submitted:
-            st.session_state.top_search_results_query = top_search_query.strip()
-            st.session_state.main_nav_tab = "🔎 Movie Search"
-            st.session_state.top_menu_select = "Home"
-            st.session_state.last_top_menu_choice = "Home"
+            cleaned_query = top_search_query.strip()
+            st.session_state.top_search_results_query = cleaned_query
+            if top_search_type == "People":
+                st.session_state.person_search_input = cleaned_query
+                st.session_state.main_nav_tab = "🎭 Actors & Directors"
+                st.session_state.top_menu_select = "Actors & Directors"
+                st.session_state.last_top_menu_choice = "Actors & Directors"
+            elif top_search_type == "Franchises":
+                st.session_state.franchise_search_input = cleaned_query
+                st.session_state.franchise_mode_radio = "Search Any Franchise 🔍"
+                st.session_state.main_nav_tab = "🎞️ Movie Franchises"
+                st.session_state.top_menu_select = "Movie Franchises"
+                st.session_state.last_top_menu_choice = "Movie Franchises"
+            else:
+                st.session_state.main_nav_tab = "🔎 Movie Search"
+                st.session_state.top_menu_select = "Home"
+                st.session_state.last_top_menu_choice = "Home"
             st.rerun()
 with nav_menu:
     menu_choice = st.selectbox("☰ Menu", list(menu_options.keys()), key="top_menu_select", label_visibility="collapsed")
@@ -608,12 +708,12 @@ st.markdown("---")
 num_recommendations = 6
 sort_option = "Popularity / Match"
 selected_genre = "All"
-if st.session_state.main_nav_tab in ["🍿 Discover & Recommendations", "🎲 Mood Finder"]:
+if st.session_state.main_nav_tab == "🍿 Discover & Recommendations":
     st.sidebar.header("⚙️ Recommendation Controls")
     num_recommendations = st.sidebar.slider("Number of Movies:", min_value=3, max_value=20, value=6, key="num_movies_slider")
     sort_option = st.sidebar.selectbox("Sort Recommendations By:", ["Popularity / Match", "Highest Rating", "Release Year (Newest)"], key="sort_option_select")
     selected_genre = st.sidebar.selectbox("Filter by Genre:", ALL_GENRES, key="genre_filter_select")
-    if st.session_state.main_nav_tab == "🍿 Discover & Recommendations" and st.sidebar.button("Surprise Me! 🎲", use_container_width=True, key="surprise_btn"):
+    if st.sidebar.button("Surprise Me! 🎲", use_container_width=True, key="surprise_btn"):
         trending = get_trending_movies()
         if trending:
             rand_movie = random.choice(trending)
@@ -623,14 +723,18 @@ if st.session_state.main_nav_tab in ["🍿 Discover & Recommendations", "🎲 Mo
                 st.session_state.recommendations = get_recommendations_from_tmdb(rand_movie.get("id"), selected_genre)
             st.session_state.main_nav_tab = "🍿 Discover & Recommendations"
             st.rerun()
+elif st.session_state.main_nav_tab == "🎲 Mood Finder":
+    st.sidebar.header("🎲 Mood Results")
+    num_recommendations = st.sidebar.slider("Number of Movies:", min_value=3, max_value=20, value=6, key="mood_num_movies_slider")
+    sort_option = st.sidebar.selectbox("Sort Mood Results By:", ["Popularity / Match", "Highest Rating", "Release Year (Newest)"], key="mood_sort_option_select")
 
 main_tab_choice = st.session_state.main_nav_tab
 
 if st.session_state.get("watchlist_owner") != watchlist_owner:
-    st.session_state.watchlist = load_user_watchlist(watchlist_owner) if is_logged_in else []
+    st.session_state.watchlist = [normalize_watchlist_item(m) for m in load_user_watchlist(watchlist_owner)] if is_logged_in else []
     st.session_state.watchlist_owner = watchlist_owner
 elif "watchlist" not in st.session_state:
-    st.session_state.watchlist = load_user_watchlist(watchlist_owner) if is_logged_in else []
+    st.session_state.watchlist = [normalize_watchlist_item(m) for m in load_user_watchlist(watchlist_owner)] if is_logged_in else []
     st.session_state.watchlist_owner = watchlist_owner
 
 # --- HOME: Netflix-style horizontal movie rows ---
@@ -644,6 +748,8 @@ if main_tab_choice == "🏠 Home":
     render_home_carousel("Animation", "🍿 Animation & Cartoons", "home_animation")
     render_home_carousel("Drama", "🎭 Drama", "home_drama")
     render_home_carousel("Comedy", "😂 Comedy", "home_comedy")
+    render_home_carousel("Thriller", "🕵️ Thriller & Mystery", "home_thriller")
+    render_home_carousel("Adventure", "🧭 Adventure", "home_adventure")
     render_home_carousel("Top Rated", "⭐ Top Rated", "home_toprated")
 
 # --- Global movie search from the top bar ---
@@ -656,8 +762,9 @@ elif main_tab_choice == "🔎 Movie Search":
         st.subheader(f"Results for: {query}")
         search_results = search_movie_tmdb(query)
         formatted_results = format_tmdb_movies(search_results)
+        formatted_results = list({m["movie_id"]: m for m in formatted_results if m.get("movie_id")}.values())
         if not formatted_results:
-            st.warning("No movies found. Try another title.")
+            st.warning("No movies found, or TMDB could not be reached. Check your connection/API key and try again.")
         else:
             for row_start in range(0, len(formatted_results), 5):
                 row_items = formatted_results[row_start:row_start + 5]
@@ -672,11 +779,14 @@ elif main_tab_choice == "🔎 Movie Search":
 # --- Movie-based Recommendations ---
 elif main_tab_choice == "🍿 Discover & Recommendations":
     st.title("🎯 Movie Recommendations")
-    st.caption("Choose a movie and discover similar titles.")
-    search_query = st.text_input("Search movie to get tailored recommendations:", "Obsession", key="global_search_input")
+    st.caption("Get similar films from a title you love, or use your saved watchlist as a starting point.")
+    rec_mode = st.radio("Recommendation source", ["From a movie", "Based on my Watchlist"], horizontal=True, key="recommendation_source_mode")
+    search_query = ""
+    if rec_mode == "From a movie":
+        search_query = st.text_input("Search movie to get tailored recommendations:", "Obsession", key="global_search_input")
 
     selected_movie_id = None
-    if search_query:
+    if rec_mode == "From a movie" and search_query:
         search_results = search_movie_tmdb(search_query)
         if search_results:
             movie_options = []
@@ -695,10 +805,28 @@ elif main_tab_choice == "🍿 Discover & Recommendations":
     if "recommendations" not in st.session_state:
         st.session_state.recommendations = []
 
-    if st.button("Get Recommendations 🚀", type="primary", key="get_recs_btn") and selected_movie_id:
-        with st.spinner("Fetching live movie recommendations..."):
-            st.session_state.selected_movie_info = get_movie_details(selected_movie_id)
-            st.session_state.recommendations = get_recommendations_from_tmdb(selected_movie_id, selected_genre)
+    rec_button_label = "Get Recommendations 🚀" if rec_mode == "From a movie" else "Recommend from My Watchlist ❤️"
+    if st.button(rec_button_label, type="primary", key="get_recs_btn"):
+        with st.spinner("Finding movies you may like..."):
+            if rec_mode == "From a movie" and selected_movie_id:
+                st.session_state.selected_movie_info = get_movie_details(selected_movie_id)
+                st.session_state.recommendations = get_recommendations_from_tmdb(selected_movie_id, selected_genre)
+            elif rec_mode == "Based on my Watchlist":
+                seeds = st.session_state.get("watchlist", [])
+                if not seeds:
+                    st.info("Your Watchlist is empty. Add a few movies first, or choose 'From a movie'.")
+                    st.session_state.recommendations = []
+                else:
+                    combined, seen = [], set()
+                    for seed in seeds[:4]:
+                        for rec in get_recommendations_from_tmdb(seed.get("movie_id"), selected_genre):
+                            if rec.get("movie_id") not in seen and rec.get("movie_id") not in {x.get("movie_id") for x in seeds}:
+                                combined.append(rec)
+                                seen.add(rec.get("movie_id"))
+                    st.session_state.selected_movie_info = None
+                    st.session_state.recommendations = combined
+            else:
+                st.warning("Search for a movie and select a result first.")
 
     if "selected_movie_info" in st.session_state and st.session_state.selected_movie_info:
         sel_movie = st.session_state.selected_movie_info
@@ -756,8 +884,8 @@ elif main_tab_choice == "🍿 Discover & Recommendations":
 # --- Mood Finder ---
 elif main_tab_choice == "🎲 Mood Finder":
     st.title("🎲 Mood Finder")
-    st.caption("Find movies by the kind of story you feel like watching.")
-    st.subheader("🎲 Mood-Based Movie Finder")
+    st.caption("Choose the kind of experience you want tonight. Results are filtered for a minimum rating and vote count when TMDB provides that data.")
+    st.subheader("🎲 What are you in the mood for?")
     selected_mood = st.selectbox("Select Mood:", list(MOOD_OPTIONS.keys()), key="mood_selector")
 
     if "mood_page" not in st.session_state:
@@ -771,7 +899,16 @@ elif main_tab_choice == "🎲 Mood Finder":
     with st.spinner("Finding movies matching your mood..."):
         mood_movies, total_mood_pages = discover_movies_by_mood(mood_data["genres"], mood_data["sort"], page=st.session_state.mood_page)
 
+    if not mood_movies:
+        st.info("No results loaded for this mood right now. Try again or select another mood.")
     if mood_movies:
+        if sort_option == "Highest Rating":
+            mood_movies = sorted(mood_movies, key=lambda x: x.get("rating", 0), reverse=True)
+        elif sort_option == "Release Year (Newest)":
+            mood_movies = sorted(mood_movies, key=lambda x: x.get("year", "0000"), reverse=True)
+        else:
+            mood_movies = sorted(mood_movies, key=lambda x: x.get("match", 0), reverse=True)
+        mood_movies = mood_movies[:num_recommendations]
         col_m1, col_m2 = st.columns([2, 3])
         with col_m1:
             st.markdown(f"### 🌟 Mood Pick Recommendations")
@@ -843,7 +980,9 @@ elif main_tab_choice == "🎭 Actors & Directors":
                 st.markdown(birth_line)
             if person_details.get("deathday"):
                 st.write(f"**Died:** {person_details['deathday']}")
-            st.write(f"**Popularity:** {round(person_details.get('popularity', selected_person.get('popularity', 0)) or 0, 1)}")
+            if person_details.get("known_for_department"):
+                st.write(f"**Field:** {person_details.get('known_for_department')}")
+            st.write(f"**TMDB popularity:** {round(person_details.get('popularity', selected_person.get('popularity', 0)) or 0, 1)}")
             known_for = selected_person.get("known_for", [])
             known_titles = [item.get("title") or item.get("name") for item in known_for if item.get("title") or item.get("name")]
             if known_titles:
@@ -853,7 +992,10 @@ elif main_tab_choice == "🎭 Actors & Directors":
                 st.markdown("**Biography**")
                 st.write(biography)
             else:
-                st.info("No biography is available for this person in TMDB yet. Basic profile details and filmography are shown when available.")
+                st.info("TMDB has no biography for this person yet. Other profile details and filmography are shown when available.")
+            homepage = person_details.get("homepage")
+            if homepage:
+                st.markdown(f"[Official website ↗]({homepage})")
 
     if selected_person_id:
         should_load_filmography = st.session_state.get("loaded_person_id") != selected_person_id
@@ -920,9 +1062,13 @@ elif main_tab_choice == "🎞️ Movie Franchises":
         if franchise_query:
             coll_results = search_collection_tmdb(franchise_query)
             if coll_results:
-                coll_options = {c.get("name"): c.get("id") for c in coll_results}
-                chosen_coll_name = st.selectbox("Select Collection from results:", list(coll_options.keys()), key="coll_selectbox")
-                selected_coll_id = coll_options.get(chosen_coll_name)
+                coll_options = {c.get("name"): c.get("id") for c in coll_results if c.get("name") and c.get("id")}
+                if coll_options:
+                    coll_names = list(coll_options.keys())
+                    chosen_coll_name = st.selectbox("Select Collection from results:", coll_names, key="coll_selectbox")
+                    selected_coll_id = coll_options.get(chosen_coll_name)
+            else:
+                st.info("No collections found for that search. Try a shorter or more general name.")
 
     if selected_coll_id:
         with st.spinner("Fetching full franchise chronologically..."):
@@ -955,30 +1101,49 @@ elif main_tab_choice == "🎞️ Movie Franchises":
 
 # --- TAB 3: My Watchlist ---
 elif main_tab_choice == "❤️ My Watchlist":
-    st.subheader(f"❤️ {user_name}'s Watchlist")
+    st.title(f"❤️ {user_name}'s Watchlist")
+    st.caption("Track what you want to watch, what you have seen, and your own ratings.")
     if not is_logged_in:
-        st.info("Guest Watchlist is temporary for this session. Sign in with Google to save it to your account between visits.")
+        st.info("Guest Watchlist lasts for this browser session. Sign in to associate it with your account.")
+    elif not supabase_storage_enabled():
+        st.info("Cloud database is not configured. Your signed-in Watchlist currently uses local JSON storage, which may not persist on hosted deployments. See DATABASE_SETUP.md.")
     if not st.session_state.watchlist:
-        st.info("Your watchlist is currently empty. Open any movie details modal and click 'Add to Watchlist' ❤️!")
+        st.info("Your Watchlist is empty. Open any movie and choose 'Add to Watchlist' to start your list.")
     else:
-        st.markdown(f"You have **{len(st.session_state.watchlist)}** movies saved in your watchlist:")
-        
+        statuses = ["All", "Want to Watch", "Watching", "Watched"]
+        status_filter = st.selectbox("Filter by status", statuses, key="watchlist_status_filter")
+        watchlist_items = [normalize_watchlist_item(m) for m in st.session_state.watchlist]
+        if status_filter != "All":
+            watchlist_items = [m for m in watchlist_items if m.get("status") == status_filter]
+        st.markdown(f"**{len(watchlist_items)}** movies in this view · **{len(st.session_state.watchlist)}** saved in total")
+        if not watchlist_items:
+            st.info("No movies match this status yet.")
         COLS_PER_ROW = 5
-        watchlist_items = st.session_state.watchlist
         for row_start in range(0, len(watchlist_items), COLS_PER_ROW):
             row_items = watchlist_items[row_start : row_start + COLS_PER_ROW]
-            cols = st.columns(COLS_PER_ROW)
-            
+            cols = st.columns(min(COLS_PER_ROW, len(row_items)))
             for idx, item in enumerate(row_items):
                 with cols[idx]:
                     st.image(item['poster'], use_container_width=True)
-                    st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                    if st.button(f"{item['title']} ({item['year']})", key=f"btn_watch_{item['movie_id']}_{row_start + idx}"):
+                    st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span> · {item["year"]}</div>', unsafe_allow_html=True)
+                    if st.button(f"{item['title']}", key=f"btn_watch_{item['movie_id']}_{row_start + idx}", use_container_width=True):
                         show_movie_modal(item, prefix=f"watch_{row_start + idx}")
-        
+                    status_options = ["Want to Watch", "Watching", "Watched"]
+                    new_status = st.selectbox("Status", status_options, index=status_options.index(item["status"]) if item["status"] in status_options else 0, key=f"wl_status_{item['movie_id']}")
+                    new_rating = st.slider("Your rating", 0, 10, int(item.get("personal_rating", 0) or 0), key=f"wl_rating_{item['movie_id']}", help="0 means not rated yet")
+                    new_note = st.text_input("Note (optional)", value=item.get("note", ""), key=f"wl_note_{item['movie_id']}", placeholder="Thoughts about this movie…")
+                    if (new_status != item["status"] or new_rating != int(item.get("personal_rating", 0) or 0) or new_note != item.get("note", "")):
+                        for saved in st.session_state.watchlist:
+                            if saved.get("movie_id") == item.get("movie_id"):
+                                saved["status"] = new_status
+                                saved["personal_rating"] = new_rating
+                                saved["note"] = new_note
+                                break
+                        if is_logged_in:
+                            save_user_watchlist(watchlist_owner, st.session_state.watchlist)
         st.markdown("---")
-        if st.button("🗑️ Clear Entire Watchlist", type="secondary"):
+        if st.button("🗑️ Clear Entire Watchlist", type="secondary", key="clear_watchlist_all"):
             st.session_state.watchlist = []
             save_user_watchlist(watchlist_owner, st.session_state.watchlist) if is_logged_in else None
-            st.toast("Watchlist cleared successfully.", icon="🧹")
+            st.toast("Watchlist cleared.", icon="🧹")
             st.rerun()
