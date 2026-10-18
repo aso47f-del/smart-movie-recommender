@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import random
+import time
 
 # 1. Page Configuration
 st.set_page_config(
@@ -83,7 +84,7 @@ MOOD_OPTIONS = {
     "Romance & Drama 💖": {"genres": "10749,18", "sort": "vote_average.desc"}
 }
 
-# --- API Functions with Enhanced Error Handling (st.toast) and TTL (Cache Optimization) ---
+# --- API Functions with Enhanced Error Handling (st.toast) and TTL Optimization ---
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_movie_tmdb(query):
@@ -328,7 +329,7 @@ def get_recommendations_from_tmdb(movie_id, genre_filter="All"):
         st.toast("⚠️ Error fetching recommendations.", icon="⚠️")
     return []
 
-# Movie Details Dialog Modal
+# Movie Details Dialog Modal with Actor Filmography Shortcut
 @st.dialog("🎬 Movie Details, Cast & Trailer", width="large")
 def show_movie_modal(item):
     overview, runtime, imdb_id, youtube_key, director, cast = fetch_movie_modal_data(item['movie_id'])
@@ -365,7 +366,7 @@ def show_movie_modal(item):
         st.write(overview)
         
         if cast:
-            st.markdown("**👥 Top Cast:**")
+            st.markdown("**👥 Top Cast (Click 'Works' to view filmography):**")
             cast_cols = st.columns(len(cast))
             for i, actor in enumerate(cast):
                 with cast_cols[i]:
@@ -375,6 +376,11 @@ def show_movie_modal(item):
                     else:
                         st.image(NO_IMAGE_URL, use_container_width=True)
                     st.markdown(f'<div class="cast-name">{actor.get("name")}</div>', unsafe_allow_html=True)
+                    
+                    # Clickable button to jump to actor works
+                    if st.button("🎬 Works", key=f"modal_actor_work_{actor.get('id')}_{i}", help="View Actor Filmography"):
+                        st.session_state.person_query = actor.get('name')
+                        st.toast(f"Selected {actor.get('name')}! Check the 'Actor & Director Explorer' tab.", icon="🌟")
         
         st.markdown("**📺 Where to Watch (Streaming):**")
         if providers:
@@ -416,9 +422,16 @@ if st.sidebar.button("Surprise Me! 🎲", use_container_width=True, key="surpris
     if trending:
         rand_movie = random.choice(trending)
         st.session_state.selected_movie_id = rand_movie.get("id")
-        st.session_state.selected_movie_info = get_movie_details(rand_movie.get("id"))
-        with st.spinner(f'Surprise! Recommending based on "{rand_movie.get("title")}"...'):
+        
+        # Visual Status Loading for Surprise Me
+        with st.status(f'Surprise! Selecting "{rand_movie.get("title")}"...', expanded=True) as status:
+            st.write("🔄 Connecting to TMDB API...")
+            time.sleep(0.3)
+            st.write("⭐ Fetching movie overview and ratings...")
+            st.session_state.selected_movie_info = get_movie_details(rand_movie.get("id"))
+            st.write("🍿 Generating tailored recommendations...")
             st.session_state.recommendations = get_recommendations_from_tmdb(rand_movie.get("id"), selected_genre)
+            status.update(label="Surprise movie loaded successfully! 🎉", state="complete", expanded=False)
 
 # Main UI & Tabs Including Watchlist
 st.title("🎬 Smart Live Movie & Franchise Hub")
@@ -453,10 +466,16 @@ with tab1:
     if "recommendations" not in st.session_state:
         st.session_state.recommendations = []
 
+    # Visual Status Loading for Get Recommendations button
     if st.button("Get Recommendations 🚀", type="primary", key="get_recs_btn") and selected_movie_id:
-        with st.spinner('Fetching movie details and live recommendations...'):
+        with st.status("Fetching live movie data...", expanded=True) as status:
+            st.write("🔄 Connecting to TMDB database...")
+            time.sleep(0.3)
+            st.write("⭐ Retrieving selected movie details...")
             st.session_state.selected_movie_info = get_movie_details(selected_movie_id)
+            st.write("🍿 Finding smart recommendations...")
             st.session_state.recommendations = get_recommendations_from_tmdb(selected_movie_id, selected_genre)
+            status.update(label="Recommendations loaded successfully! 🚀", state="complete", expanded=False)
 
     if "selected_movie_info" in st.session_state and st.session_state.selected_movie_info:
         sel_movie = st.session_state.selected_movie_info
@@ -544,8 +563,13 @@ with tab2:
                 selected_coll_id = coll_options.get(chosen_coll_name)
 
     if selected_coll_id:
-        with st.spinner("Fetching full franchise chronologically..."):
+        with st.status("Fetching franchise chronologically...", expanded=True) as status:
+            st.write("🔄 Connecting to collection API...")
+            time.sleep(0.3)
+            st.write("🎬 Retrieving collection overview and movie parts...")
             collection = get_collection_details(selected_coll_id)
+            status.update(label="Franchise loaded successfully! 🎬", state="complete", expanded=False)
+            
             if collection:
                 st.markdown("---")
                 col_c1, col_c2 = st.columns([1, 4])
@@ -652,7 +676,10 @@ with tab3:
 
     with sub_tab2:
         st.subheader("Explore Actor or Director Filmography")
-        person_query = st.text_input("Search for an actor or director:", "", key="person_search_input")
+        
+        # Prefill if an actor was clicked from a movie modal
+        default_person_query = st.session_state.get('person_query', '')
+        person_query = st.text_input("Search for an actor or director:", default_person_query, key="person_search_input")
         
         selected_person_id = None
         if person_query:
@@ -665,8 +692,12 @@ with tab3:
         if selected_person_id:
             if st.button("Show Full Filmography 🎥", type="primary", key="person_btn"):
                 st.session_state.person_page = 1
-                with st.spinner("Fetching complete filmography..."):
+                with st.status("Fetching complete filmography...", expanded=True) as status:
+                    st.write("🔄 Connecting to person credits API...")
+                    time.sleep(0.3)
+                    st.write("🎬 Compiling cast and crew works...")
                     st.session_state.person_movies = get_person_filmography(selected_person_id)
+                    status.update(label="Filmography loaded successfully! 🎥", state="complete", expanded=False)
                     
         if "person_movies" in st.session_state and st.session_state.person_movies:
             st.markdown("---")
