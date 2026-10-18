@@ -10,9 +10,26 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. CSS Styling for Clean Modern UI
+# 2. CSS Styling for Smooth Transitions & Modern Clean UI
 st.markdown("""
     <style>
+    /* Smooth Fade-in Animation for Page Transitions */
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(6px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Apply smooth fade-in to the main layout and content blocks */
+    .block-container, div[data-testid="stVerticalBlock"] > div {
+        animation: fadeIn 0.35s ease-in-out;
+    }
+
     div[data-testid="stImage"] img {
         border-radius: 12px;
         transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
@@ -46,7 +63,7 @@ st.markdown("""
         margin-top: 4px;
         margin-bottom: 4px;
     }
-    /* Custom styling for radio tabs */
+    /* Horizontal Layout for Main Radio Navigation */
     div.row-widget.stRadio > div {
         flex-direction: row;
         gap: 20px;
@@ -379,7 +396,6 @@ def show_movie_modal(item, prefix="modal"):
                     img_url = f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else NO_IMAGE_URL
                     st.image(img_url, use_container_width=True)
                     
-                    # When actor is clicked: Switch main navigation tab to "Global Search Hub" and set the search query input state
                     if st.button(f"👤 {actor.get('name')}", key=f"{prefix}_actor_{actor.get('id')}_{i}"):
                         st.session_state.main_nav_tab = "🔍 Global Search Hub"
                         st.session_state.person_search_input = actor.get('name')
@@ -433,7 +449,7 @@ if st.sidebar.button("Surprise Me! 🎲", use_container_width=True, key="surpris
             st.session_state.recommendations = get_recommendations_from_tmdb(rand_movie.get("id"), selected_genre)
             status.update(label="Surprise movie loaded! 🎉", state="complete", expanded=False)
 
-# Main UI Title & Programmable Navigation Hub using Radio instead of st.tabs
+# Main UI Title & Programmable Navigation Hub using Radio
 st.title("🎬 Smart Live Movie & Franchise Hub")
 st.caption("Personalized movie recommendations, mood discovery, global search, and franchises!")
 
@@ -455,16 +471,11 @@ if "watchlist" not in st.session_state:
 
 # --- TAB 1: Discover & Recommendations ---
 if main_tab_choice == "🍿 Discover & Recommendations":
-    discovery_mode = st.radio(
-        "Choose Discovery Mode:", 
-        ["Movie-based Recommendations 🚀", "Mood-based Discovery 🎲"], 
-        horizontal=True,
-        key="discovery_mode_radio"
-    )
+    # Unified st.tabs matching Global Search Hub style
+    sub_tab1, sub_tab2 = st.tabs(["🚀 Movie-based Recommendations", "🎲 Mood-based Discovery"])
     
-    st.markdown("---")
-    
-    if discovery_mode == "Movie-based Recommendations 🚀":
+    # Sub-tab 1: Movie Recommendations
+    with sub_tab1:
         search_query = st.text_input("Search movie to get tailored recommendations:", "Obsession", key="global_search_input")
 
         selected_movie_id = None
@@ -547,7 +558,8 @@ if main_tab_choice == "🍿 Discover & Recommendations":
                             if st.button("🎬 Details", key=f"btn_recs_{item['movie_id']}_{row_start + idx}"):
                                 show_movie_modal(item, prefix=f"recs_{row_start + idx}")
 
-    else:
+    # Sub-tab 2: Mood Recommendations
+    with sub_tab2:
         st.subheader("🎲 Mood-Based Movie Finder")
         selected_mood = st.selectbox("Select Mood:", list(MOOD_OPTIONS.keys()), key="mood_selector")
         
