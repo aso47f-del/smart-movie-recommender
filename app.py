@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. CSS Styling for Professional Mobile App UI & Fixed Modal Layout
+# 2. Native IMDb Responsive Mobile CSS
 st.markdown("""
     <style>
     @keyframes fadeIn {
@@ -18,94 +18,114 @@ st.markdown("""
         to { opacity: 1; transform: translateY(0); }
     }
 
-    .block-container, div[data-testid="stVerticalBlock"] > div {
-        animation: fadeIn 0.35s ease-in-out;
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 2rem !important;
     }
 
-    /* General Poster Styling */
-    div[data-testid="stImage"] img {
+    /* --- Native IMDb Horizontal Scroll Container --- */
+    .imdb-carousel {
+        display: flex !important;
+        flex-direction: row !important;
+        overflow-x: auto !important;
+        gap: 12px !important;
+        padding: 10px 4px 16px 4px !important;
+        scroll-snap-type: x mandatory !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    .imdb-carousel::-webkit-scrollbar {
+        height: 5px;
+    }
+    .imdb-carousel::-webkit-scrollbar-thumb {
+        background: #f5c518;
         border-radius: 10px;
-        transition: transform 0.3s ease-in-out;
+    }
+
+    /* IMDb Movie Card */
+    .imdb-card {
+        flex: 0 0 150px !important;
+        min-width: 150px !important;
+        max-width: 150px !important;
+        scroll-snap-align: start !important;
+        background: #1f1f1f;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        border: 1px solid #2c2c2c;
+        display: flex;
+        flex-direction: column;
+    }
+    .imdb-card img {
+        width: 100%;
+        height: 215px;
         object-fit: cover;
     }
-    
-    .movie-info {
-        font-size: 0.8rem;
-        font-weight: 600;
-        margin-bottom: 0.3rem;
-        text-align: center;
+    .imdb-card-body {
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        flex-grow: 1;
     }
-    .movie-rating { color: #ffb703; }
-    .movie-match { color: #2ec4b6; }
-    
-    div.stButton > button {
-        width: 100% !important;
-        border-radius: 8px;
+    .imdb-card-title {
         font-size: 0.8rem;
         font-weight: 700;
-        height: 2.6rem;
-        white-space: normal;
+        color: #ffffff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-top: 4px;
+    }
+    .imdb-card-meta {
+        font-size: 0.75rem;
+        color: #f5c518;
+        font-weight: 600;
+        margin: 2px 0 6px 0;
+    }
+
+    /* IMDb Actor Circle Card */
+    .actor-card {
+        flex: 0 0 110px !important;
+        min-width: 110px !important;
+        text-align: center;
+        scroll-snap-align: start !important;
+    }
+    .actor-card img {
+        width: 90px;
+        height: 90px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #f5c518;
+        margin: 0 auto;
+    }
+    .actor-name {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #ffffff;
+        margin-top: 6px;
+        white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
-    /* --- Perfect Mobile Grid & Modal Responsiveness --- */
+    /* Selected Movie Header Banner */
+    .hero-container {
+        background: #141414;
+        border-radius: 14px;
+        padding: 12px;
+        border: 1px solid #2a2a2a;
+        margin-bottom: 20px;
+    }
+
+    /* Fix Streamlit Dialog on Mobile */
     @media (max-width: 768px) {
-        body {
-            overflow-x: hidden;
-            background-color: #0e0e17;
-        }
         .block-container {
             padding-left: 0.5rem !important;
             padding-right: 0.5rem !important;
-            padding-top: 0.8rem !important;
         }
-
-        /* تحويل أعمدة الأفلام لشكل بطاقات منظمة في عمودين (2-Column Grid) */
-        div[data-testid="stHorizontalBlock"] {
-            display: flex !important;
-            flex-wrap: wrap !important;
-            gap: 8px !important;
-        }
-        div[data-testid="column"] {
-            width: calc(50% - 4px) !important;
-            flex: 1 1 calc(50% - 4px) !important;
-            min-width: calc(50% - 4px) !important;
-            max-width: calc(50% - 4px) !important;
-            margin-bottom: 10px !important;
-            background: #161622 !important;
-            border-radius: 10px !important;
-            padding: 6px !important;
-            border: 1px solid #232333 !important;
-        }
-
-        /* تثبيت أبعاد البوسترات لتكون متناسقة وغير ضخمة */
-        div[data-testid="stImage"] img {
-            width: 100% !important;
-            height: 190px !important;
-            object-fit: cover !important;
-            border-radius: 8px !important;
-        }
-
-        /* إصلاح النافذة المنبثقة (Modal) لكي تظهر العناصر تحت بعضها بدون قص */
         div[data-testid="stDialog"] div[data-testid="column"] {
             width: 100% !important;
             flex: 1 1 100% !important;
-            min-width: 100% !important;
-            max-width: 100% !important;
-            background: transparent !important;
-            border: none !important;
-            padding: 0px !important;
-        }
-
-        div.stButton > button {
-            font-size: 0.72rem !important;
-            height: 2.4rem !important;
-            padding: 0px 2px !important;
-        }
-
-        .movie-info {
-            font-size: 0.7rem !important;
         }
     }
     </style>
@@ -314,7 +334,7 @@ def fetch_movie_modal_data(movie_id):
                 if person.get("job") == "Director":
                     director = person.get("name")
                     break
-            cast = c_data.get("cast", [])[:4]
+            cast = c_data.get("cast", [])[:6]
     except Exception:
         st.toast("⚠️ Error loading modal content.", icon="⚠️")
     return overview, runtime, imdb_id, youtube_key, director, cast
@@ -400,8 +420,7 @@ def show_movie_modal(item, prefix="modal"):
     col1, col2 = st.columns([1, 2])
     with col1:
         st.image(item['poster'], use_container_width=True)
-        st.markdown(f"**Release Year:** {item['year']}")
-        st.markdown(f"**Runtime:** {runtime}")
+        st.markdown(f"**Year:** {item['year']} | **Runtime:** {runtime}")
         st.markdown(f"**Rating:** ⭐ {item['rating']}/10")
         if imdb_id:
             st.markdown(f"[🔗 Open in IMDb](https://www.imdb.com/title/{imdb_id})")
@@ -424,44 +443,44 @@ def show_movie_modal(item, prefix="modal"):
     with col2:
         st.subheader(f"{item['title']} ({item['year']})")
         st.markdown(f"🎬 **Director:** {director}")
-        st.markdown("**Overview / Storyline:**")
+        st.markdown("**Storyline:**")
         st.write(overview)
         
+        # IMDb-Style Cast Horizontal Circle Carousel (Matching Image 3)
         if cast:
-            st.markdown("**👥 Top Cast:**")
-            cast_cols = st.columns(min(len(cast), 4))
-            for i, actor in enumerate(cast):
-                with cast_cols[i]:
-                    profile_path = actor.get("profile_path")
-                    img_url = f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else NO_IMAGE_URL
-                    st.image(img_url, width=90)
-                    
-                    if st.button(f"👤 {actor.get('name')}", key=f"{prefix}_actor_{actor.get('id')}_{i}"):
-                        st.session_state.main_nav_tab = "🔍 Global Search Hub"
-                        st.session_state.person_search_input = actor.get('name')
-                        st.rerun()
+            st.markdown("**👥 Top Cast (Trending People Style):**")
+            cast_html = '<div class="imdb-carousel">'
+            for actor in cast:
+                profile_path = actor.get("profile_path")
+                img_url = f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else NO_IMAGE_URL
+                cast_html += f'''
+                <div class="actor-card">
+                    <img src="{img_url}">
+                    <div class="actor-name">{actor.get('name')}</div>
+                </div>
+                '''
+            cast_html += '</div>'
+            st.markdown(cast_html, unsafe_allow_html=True)
         
-        st.markdown("**📺 Where to Watch (Streaming):**")
+        st.markdown("**📺 Where to Watch:**")
         if providers:
             prov_cols = st.columns(min(len(providers), 4))
             for i, prov in enumerate(providers[:4]):
                 with prov_cols[i]:
                     logo_path = prov.get("logo_path")
                     if logo_path:
-                        st.image(f"https://image.tmdb.org/t/p/w92{logo_path}", width=45)
+                        st.image(f"https://image.tmdb.org/t/p/w92{logo_path}", width=40)
                     st.caption(prov.get("provider_name"))
         else:
-            st.info("No online streaming providers available for this movie currently.")
+            st.info("No streaming providers available.")
         
         if youtube_key:
             st.markdown("**Official Trailer:**")
             st.video(f"https://www.youtube.com/watch?v={youtube_key}")
-        else:
-            st.info("No trailer video available for this movie.")
 
 # Sidebar Controls & Filters
 st.sidebar.header("⚙️ Controls & Filters")
-num_recommendations = st.sidebar.slider("Number of Movies:", min_value=3, max_value=20, value=10, key="num_movies_slider")
+num_recommendations = st.sidebar.slider("Number of Movies:", min_value=4, max_value=20, value=10, key="num_movies_slider")
 
 sort_option = st.sidebar.selectbox(
     "Sort Recommendations By:",
@@ -475,20 +494,8 @@ selected_genre = st.sidebar.selectbox(
     key="genre_filter_select"
 )
 
-st.sidebar.markdown("---")
-if st.sidebar.button("Surprise Me! 🎲", use_container_width=True, key="surprise_btn"):
-    trending = get_trending_movies()
-    if trending:
-        rand_movie = random.choice(trending)
-        st.session_state.selected_movie_id = rand_movie.get("id")
-        
-        with st.spinner(f'Surprise! Selecting "{rand_movie.get("title")}"...'):
-            st.session_state.selected_movie_info = get_movie_details(rand_movie.get("id"))
-            st.session_state.recommendations = get_recommendations_from_tmdb(rand_movie.get("id"), selected_genre)
-
 # Main UI Title & Navigation Hub
 st.title("🎬 Smart Live Movie & Franchise Hub")
-st.caption("Personalized movie recommendations, mood discovery, global search, and franchises!")
 
 if "main_nav_tab" not in st.session_state:
     st.session_state.main_nav_tab = "🍿 Discover & Recommendations"
@@ -506,27 +513,35 @@ st.markdown("---")
 if "watchlist" not in st.session_state:
     st.session_state.watchlist = []
 
-# Helper Function for Clean Responsive 2-Column Grid Cards
-def render_movie_grid(movies_list, prefix_key):
-    COLS_PER_ROW = 5
-    for row_start in range(0, len(movies_list), COLS_PER_ROW):
-        row_items = movies_list[row_start : row_start + COLS_PER_ROW]
-        cols = st.columns(COLS_PER_ROW)
-        
-        for idx, item in enumerate(row_items):
-            with cols[idx]:
-                st.image(item['poster'], use_container_width=True)
-                
-                match_str = f' | <span class="movie-match">🎯 {item["match"]}%</span>' if 'match' in item else ''
-                st.markdown(
-                    f'<div class="movie-info">'
-                    f'<span class="movie-rating">⭐ {item["rating"]}/10</span>{match_str}'
-                    f'</div>', 
-                    unsafe_allow_html=True
-                )
-                
-                if st.button(f"{item['title']} ({item['year']})", key=f"{prefix_key}_{item['movie_id']}_{row_start + idx}"):
-                    show_movie_modal(item, prefix=f"{prefix_key}_{row_start + idx}")
+# --- IMDb Pure HTML Horizontal Swipe Carousel Renderer (Matching Image 2) ---
+def render_imdb_horizontal_carousel(movies_list, prefix_key):
+    cards_html = '<div class="imdb-carousel">'
+    for idx, item in enumerate(movies_list):
+        match_str = f'🎯 {item["match"]}%' if 'match' in item else ''
+        cards_html += f'''
+        <div class="imdb-card">
+            <img src="{item['poster']}">
+            <div class="imdb-card-body">
+                <div>
+                    <div class="imdb-card-meta">⭐ {item['rating']} {match_str}</div>
+                    <div class="imdb-card-title">{item['title']}</div>
+                </div>
+            </div>
+        </div>
+        '''
+    cards_html += '</div>'
+    st.markdown(cards_html, unsafe_allow_html=True)
+    
+    # Interactive Modal Selector below Carousel for Quick Access
+    selected_title = st.selectbox(
+        "⚡ Select movie to view full details / trailer:", 
+        [f"{m['title']} ({m['year']})" for m in movies_list], 
+        key=f"{prefix_key}_select_box"
+    )
+    if st.button("🎬 Open Movie Details", key=f"{prefix_key}_btn_open"):
+        chosen_movie = next((m for m in movies_list if f"{m['title']} ({m['year']})" == selected_title), None)
+        if chosen_movie:
+            show_movie_modal(chosen_movie, prefix=prefix_key)
 
 # --- TAB 1: Discover & Recommendations ---
 if main_tab_choice == "🍿 Discover & Recommendations":
@@ -560,23 +575,26 @@ if main_tab_choice == "🍿 Discover & Recommendations":
                 st.session_state.selected_movie_info = get_movie_details(selected_movie_id)
                 st.session_state.recommendations = get_recommendations_from_tmdb(selected_movie_id, selected_genre)
 
+        # 1. Selected Movie (Matching Image 1: IMDb Banner Header)
         if "selected_movie_info" in st.session_state and st.session_state.selected_movie_info:
             sel_movie = st.session_state.selected_movie_info
             st.markdown("---")
-            st.subheader("🎯 Selected Movie")
+            st.subheader("🎯 Selected Movie (IMDb Style)")
             
-            col_img, col_info = st.columns([1, 4])
+            # Rendering Header Movie Banner
+            col_img, col_info = st.columns([1, 2])
             with col_img:
-                st.image(sel_movie['poster'], width=180)
+                st.image(sel_movie['poster'], use_container_width=True)
             with col_info:
-                st.markdown(f"### {sel_movie['title']} ({sel_movie['year']})")
-                st.markdown(f"⭐ **Rating:** {sel_movie['rating']}/10")
+                st.markdown(f"## {sel_movie['title']} ({sel_movie['year']})")
+                st.markdown(f"⭐ **IMDb Rating:** {sel_movie['rating']}/10")
                 st.write(sel_movie['overview'])
-                if st.button(f"🎬 View Details: {sel_movie['title']}", key="btn_selected_details"):
+                if st.button(f"🎬 Play Trailer & Full Details", key="btn_selected_details", type="primary"):
                     show_movie_modal(sel_movie, prefix="selected")
 
+            # 2. Recommendations Horizontal Carousel (Matching Image 2)
             st.markdown("---")
-            st.subheader("🍿 Recommended Movies")
+            st.subheader("🍿 Recommended Movies (Swipe Left/Right 👈👉)")
 
         if st.session_state.recommendations:
             results = st.session_state.recommendations.copy()
@@ -593,7 +611,7 @@ if main_tab_choice == "🍿 Discover & Recommendations":
             if not results:
                 st.warning(f"⚠️ No recommendations found matching genre '{selected_genre}'.")
             else:
-                render_movie_grid(results, "btn_recs")
+                render_imdb_horizontal_carousel(results, "recs")
 
     with sub_tab2:
         st.subheader("🎲 Mood-Based Movie Finder")
@@ -611,19 +629,8 @@ if main_tab_choice == "🍿 Discover & Recommendations":
             mood_movies, total_mood_pages = discover_movies_by_mood(mood_data["genres"], mood_data["sort"], page=st.session_state.mood_page)
         
         if mood_movies:
-            col_m1, col_m2 = st.columns([2, 3])
-            with col_m1:
-                st.markdown(f"### 🌟 Mood Pick Recommendations")
-            with col_m2:
-                if total_mood_pages > 1:
-                    st.session_state.mood_page = st.selectbox(
-                        "Select Page:", 
-                        range(1, total_mood_pages + 1), 
-                        index=st.session_state.mood_page - 1,
-                        key="mood_page_selector"
-                    )
-            
-            render_movie_grid(mood_movies, "btn_mood")
+            st.markdown("### 🌟 Mood Pick Recommendations (Swipe 👈👉)")
+            render_imdb_horizontal_carousel(mood_movies, "mood")
 
 # --- TAB 2: Global Search Hub ---
 elif main_tab_choice == "🔍 Global Search Hub":
@@ -631,49 +638,25 @@ elif main_tab_choice == "🔍 Global Search Hub":
     
     with search_sub_tab1:
         st.subheader("Search Actor or Director Filmography")
-        
         person_query = st.text_input("Search for actor or director:", key="person_search_input")
         
         selected_person_id = None
         if person_query:
             person_results = search_person_tmdb(person_query)
             if person_results:
-                person_options = {f"{p.get('name')} ({p.get('known_for_department', 'Artist')} - Pop: {round(p.get('popularity', 0), 1)})": p.get('id') for p in person_results}
+                person_options = {f"{p.get('name')} ({p.get('known_for_department', 'Artist')})": p.get('id') for p in person_results}
                 chosen_person = st.selectbox("Select Person:", list(person_options.keys()), key="person_selectbox")
                 selected_person_id = person_options.get(chosen_person)
                 
         if selected_person_id:
             if st.button("Show Full Filmography 🎥", type="primary", key="person_btn") or person_query:
-                st.session_state.person_page = 1
                 with st.spinner("Loading complete filmography..."):
                     st.session_state.person_movies = get_person_filmography(selected_person_id)
                     
         if "person_movies" in st.session_state and st.session_state.person_movies:
             st.markdown("---")
-            all_p_movies = st.session_state.person_movies
-            total_items = len(all_p_movies)
-            items_per_page = 15
-            total_p_pages = (total_items + items_per_page - 1) // items_per_page
-            
-            if "person_page" not in st.session_state:
-                st.session_state.person_page = 1
-                
-            col_p1, col_p2 = st.columns([2, 3])
-            with col_p1:
-                st.markdown(f"### 🎬 Complete Works ({total_items} Movies)")
-            with col_p2:
-                if total_p_pages > 1:
-                    st.session_state.person_page = st.selectbox(
-                        "Select Page:", 
-                        range(1, total_p_pages + 1), 
-                        index=st.session_state.person_page - 1,
-                        key="person_page_selector"
-                    )
-            
-            start_idx = (st.session_state.person_page - 1) * items_per_page
-            page_movies = all_p_movies[start_idx:start_idx + items_per_page]
-            
-            render_movie_grid(page_movies, "btn_person")
+            st.markdown(f"### 🎬 Complete Works ({len(st.session_state.person_movies)} Movies)")
+            render_imdb_horizontal_carousel(st.session_state.person_movies[:15], "person")
 
     with search_sub_tab2:
         st.subheader("🔍 Explore Movie Franchises & Collections")
@@ -695,29 +678,20 @@ elif main_tab_choice == "🔍 Global Search Hub":
         if selected_coll_id:
             with st.spinner("Fetching full franchise chronologically..."):
                 collection = get_collection_details(selected_coll_id)
-                
                 if collection:
                     st.markdown("---")
-                    col_c1, col_c2 = st.columns([1, 4])
-                    with col_c1:
-                        st.image(collection['poster'], width=180)
-                    with col_c2:
-                        st.markdown(f"## {collection['name']}")
-                        st.markdown(f"**Total Movies:** {len(collection['parts'])}")
-                        st.write(collection['overview'])
-
-                    st.markdown("### 🎬 Movies in Chronological Order:")
-                    render_movie_grid(collection['parts'], "btn_coll")
+                    st.markdown(f"## {collection['name']}")
+                    st.write(collection['overview'])
+                    st.markdown("### 🎬 Movies in Chronological Order (Swipe 👈👉):")
+                    render_imdb_horizontal_carousel(collection['parts'], "coll")
 
 # --- TAB 3: My Watchlist ---
 elif main_tab_choice == "❤️ My Watchlist":
     st.subheader("❤️ Your Personal Watchlist")
     if not st.session_state.watchlist:
-        st.info("Your watchlist is currently empty. Open any movie details modal and click 'Add to Watchlist' ❤️!")
+        st.info("Your watchlist is currently empty.")
     else:
-        st.markdown(f"You have **{len(st.session_state.watchlist)}** movies saved in your watchlist:")
-        render_movie_grid(st.session_state.watchlist, "btn_watch")
-        
+        render_imdb_horizontal_carousel(st.session_state.watchlist, "watch")
         st.markdown("---")
         if st.button("🗑️ Clear Entire Watchlist", type="secondary"):
             st.session_state.watchlist = []
