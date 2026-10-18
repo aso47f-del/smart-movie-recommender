@@ -46,6 +46,11 @@ st.markdown("""
         margin-top: 4px;
         margin-bottom: 4px;
     }
+    /* Custom styling for radio tabs */
+    div.row-widget.stRadio > div {
+        flex-direction: row;
+        gap: 20px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -366,7 +371,7 @@ def show_movie_modal(item, prefix="modal"):
         st.write(overview)
         
         if cast:
-            st.markdown("**👥 Top Cast (Click button to view filmography):**")
+            st.markdown("**👥 Top Cast (Click actor name to view filmography):**")
             cast_cols = st.columns(len(cast))
             for i, actor in enumerate(cast):
                 with cast_cols[i]:
@@ -374,8 +379,10 @@ def show_movie_modal(item, prefix="modal"):
                     img_url = f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else NO_IMAGE_URL
                     st.image(img_url, use_container_width=True)
                     
+                    # When actor is clicked: Switch main navigation tab to "Global Search Hub" and set the search query input state
                     if st.button(f"👤 {actor.get('name')}", key=f"{prefix}_actor_{actor.get('id')}_{i}"):
-                        st.session_state.auto_search_person = actor.get('name')
+                        st.session_state.main_nav_tab = "🔍 Global Search Hub"
+                        st.session_state.person_search_input = actor.get('name')
                         st.rerun()
         
         st.markdown("**📺 Where to Watch (Streaming):**")
@@ -426,21 +433,28 @@ if st.sidebar.button("Surprise Me! 🎲", use_container_width=True, key="surpris
             st.session_state.recommendations = get_recommendations_from_tmdb(rand_movie.get("id"), selected_genre)
             status.update(label="Surprise movie loaded! 🎉", state="complete", expanded=False)
 
-# Main UI Title & Restructured Tabs
+# Main UI Title & Programmable Navigation Hub using Radio instead of st.tabs
 st.title("🎬 Smart Live Movie & Franchise Hub")
 st.caption("Personalized movie recommendations, mood discovery, global search, and franchises!")
 
-main_tab1, main_tab2, main_tab3 = st.tabs([
-    "🍿 Discover & Recommendations", 
-    "🔍 Global Search Hub", 
-    "❤️ My Watchlist"
-])
+if "main_nav_tab" not in st.session_state:
+    st.session_state.main_nav_tab = "🍿 Discover & Recommendations"
+
+main_tab_choice = st.radio(
+    "Navigation Hub",
+    ["🍿 Discover & Recommendations", "🔍 Global Search Hub", "❤️ My Watchlist"],
+    horizontal=True,
+    key="main_nav_tab",
+    label_visibility="collapsed"
+)
+
+st.markdown("---")
 
 if "watchlist" not in st.session_state:
     st.session_state.watchlist = []
 
 # --- TAB 1: Discover & Recommendations ---
-with main_tab1:
+if main_tab_choice == "🍿 Discover & Recommendations":
     discovery_mode = st.radio(
         "Choose Discovery Mode:", 
         ["Movie-based Recommendations 🚀", "Mood-based Discovery 🎲"], 
@@ -563,14 +577,13 @@ with main_tab1:
                             show_movie_modal(item, prefix=f"mood_{row_start + idx}")
 
 # --- TAB 2: Global Search Hub ---
-with main_tab2:
+elif main_tab_choice == "🔍 Global Search Hub":
     search_sub_tab1, search_sub_tab2 = st.tabs(["Actor & Director Explorer", "Franchises & Collections"])
     
     with search_sub_tab1:
         st.subheader("Search Actor or Director Filmography")
         
-        initial_person_query = st.session_state.get('auto_search_person', '')
-        person_query = st.text_input("Search for actor or director:", initial_person_query, key="person_search_input")
+        person_query = st.text_input("Search for actor or director:", key="person_search_input")
         
         selected_person_id = None
         if person_query:
@@ -581,14 +594,13 @@ with main_tab2:
                 selected_person_id = person_options.get(chosen_person)
                 
         if selected_person_id:
-            if st.button("Show Full Filmography 🎥", type="primary", key="person_btn") or initial_person_query:
+            if st.button("Show Full Filmography 🎥", type="primary", key="person_btn") or person_query:
                 st.session_state.person_page = 1
                 with st.status("Fetching complete filmography...", expanded=True) as status:
                     st.write("🔄 Loading filmography works...")
                     time.sleep(0.2)
                     st.session_state.person_movies = get_person_filmography(selected_person_id)
                     status.update(label="Filmography loaded successfully! 🎥", state="complete", expanded=False)
-                    st.session_state.auto_search_person = ""  # Reset trigger
                     
         if "person_movies" in st.session_state and st.session_state.person_movies:
             st.markdown("---")
@@ -669,7 +681,7 @@ with main_tab2:
                                     show_movie_modal(item, prefix=f"coll_{row_start + idx}")
 
 # --- TAB 3: My Watchlist ---
-with main_tab3:
+elif main_tab_choice == "❤️ My Watchlist":
     st.subheader("❤️ Your Personal Watchlist")
     if not st.session_state.watchlist:
         st.info("Your watchlist is currently empty. Open any movie details modal and click 'Add to Watchlist' ❤️!")
