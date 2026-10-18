@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. CSS Styling for Professional Mobile App UI & PC Layout
+# 2. CSS Styling for Native IMDb-Style Horizontal Swipe Carousel
 st.markdown("""
     <style>
     @keyframes fadeIn {
@@ -22,19 +22,15 @@ st.markdown("""
         animation: fadeIn 0.35s ease-in-out;
     }
 
-    /* Poster Styling for PC */
+    /* --- PC Styling --- */
     div[data-testid="stImage"] img {
         border-radius: 10px;
-        transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+        transition: transform 0.3s ease-in-out;
         object-fit: cover;
-    }
-    div[data-testid="stImage"] img:hover {
-        transform: scale(1.02);
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
     }
     
     .movie-info {
-        font-size: 0.8rem;
+        font-size: 0.85rem;
         font-weight: 600;
         margin-bottom: 0.3rem;
         text-align: center;
@@ -42,7 +38,6 @@ st.markdown("""
     .movie-rating { color: #ffb703; }
     .movie-match { color: #2ec4b6; }
     
-    /* Button Styling */
     div.stButton > button {
         width: 100% !important;
         border-radius: 8px;
@@ -52,66 +47,73 @@ st.markdown("""
         white-space: normal;
         overflow: hidden;
         text-overflow: ellipsis;
-        background-color: #1f1f2e;
-        border: 1px solid #3f3f59;
-        color: #ffffff;
-    }
-    div.stButton > button:hover {
-        background-color: #2e2e42;
-        border-color: #ffb703;
     }
 
-    /* --- Ultimate Mobile App-Like Experience (IMDb/Netflix Style) --- */
+    /* --- IMDb-Style Horizontal Carousel for Mobile --- */
     @media (max-width: 768px) {
         body {
             overflow-x: hidden;
             background-color: #0e0e17;
         }
         .block-container {
-            padding-left: 0.4rem !important;
-            padding-right: 0.4rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
             padding-top: 0.8rem !important;
         }
-        
-        /* تحويل الأعمدة على الموبايل لشكل كاردز (Cards) منظمة في عمودين */
+
+        /* تحويل مجموعة الأعمدة لشريط سحب أفقي زي IMDb بالضبط */
         div[data-testid="stHorizontalBlock"] {
             display: flex !important;
-            flex-wrap: wrap !important;
-            gap: 8px !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            gap: 12px !important;
+            padding-bottom: 12px !important;
+            scroll-snap-type: x mandatory !important;
+            -webkit-overflow-scrolling: touch !important;
         }
+
+        /* إجبار كل كارد فيلم يكون بعرض ثابت ومناسب للسحب باليد */
         div[data-testid="column"] {
-            width: calc(50% - 4px) !important;
-            flex: 1 1 calc(50% - 4px) !important;
-            min-width: calc(50% - 4px) !important;
-            max-width: calc(50% - 4px) !important;
-            margin-bottom: 10px !important;
-            background: #161622 !important;
+            flex: 0 0 140px !important;
+            min-width: 140px !important;
+            max-width: 140px !important;
+            scroll-snap-align: start !important;
+            background: #1a1a24 !important;
             border-radius: 12px !important;
-            padding: 6px !important;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
-            border: 1px solid #232333 !important;
+            padding: 8px !important;
+            border: 1px solid #282838 !important;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4) !important;
         }
-        
-        /* تثبيت أبعاد البوسترات بنسبة موحدة ومنع تمددها بـ aspect-ratio */
+
+        /* تثبيت أبعاد الصور جوه الكاردز لتطابق نسبة 2:3 */
         div[data-testid="stImage"] img {
             width: 100% !important;
-            aspect-ratio: 2/3 !important;
-            height: auto !important;
+            height: 190px !important;
             object-fit: cover !important;
             border-radius: 8px !important;
         }
-        
-        /* تصغير حجم الأزرار والنصوص لتناسب شاشات التاتش بشكل أنيق */
+
+        /* تخصيص شكل الأزرار والنصوص جوه الكارد على الموبايل */
         div.stButton > button {
             font-size: 0.72rem !important;
             height: 2.4rem !important;
-            padding: 0px 2px !important;
-            background-color: #22223b !important;
-            border: none !important;
+            padding: 0px 4px !important;
+            background-color: #262636 !important;
+            border: 1px solid #3b3b52 !important;
         }
+
         .movie-info {
-            font-size: 0.7rem !important;
-            margin-top: 4px;
+            font-size: 0.72rem !important;
+            margin: 4px 0 !important;
+        }
+
+        /* إخفاء شريط السحب المزعج أسفل السلايدر مع الإبقاء على اللمس */
+        div[data-testid="stHorizontalBlock"]::-webkit-scrollbar {
+            height: 4px;
+        }
+        div[data-testid="stHorizontalBlock"]::-webkit-scrollbar-thumb {
+            background: #ffb703;
+            border-radius: 10px;
         }
     }
     </style>
@@ -435,7 +437,7 @@ def show_movie_modal(item, prefix="modal"):
         
         if cast:
             st.markdown("**👥 Top Cast:**")
-            cast_cols = st.columns(min(len(cast), 4))
+            cast_cols = st.columns(len(cast))
             for i, actor in enumerate(cast):
                 with cast_cols[i]:
                     profile_path = actor.get("profile_path")
@@ -467,7 +469,7 @@ def show_movie_modal(item, prefix="modal"):
 
 # Sidebar Controls & Filters
 st.sidebar.header("⚙️ Controls & Filters")
-num_recommendations = st.sidebar.slider("Number of Movies:", min_value=3, max_value=20, value=10, key="num_movies_slider")
+num_recommendations = st.sidebar.slider("Number of Movies:", min_value=3, max_value=20, value=12, key="num_movies_slider")
 
 sort_option = st.sidebar.selectbox(
     "Sort Recommendations By:",
@@ -512,27 +514,23 @@ st.markdown("---")
 if "watchlist" not in st.session_state:
     st.session_state.watchlist = []
 
-# Helper Function for Clean Movie Grid Cards
-def render_movie_grid(movies_list, prefix_key):
-    COLS_PER_ROW = 5
-    for row_start in range(0, len(movies_list), COLS_PER_ROW):
-        row_items = movies_list[row_start : row_start + COLS_PER_ROW]
-        cols = st.columns(COLS_PER_ROW)
-        
-        for idx, item in enumerate(row_items):
-            with cols[idx]:
-                st.image(item['poster'], use_container_width=True)
-                
-                match_str = f' | <span class="movie-match">🎯 {item["match"]}%</span>' if 'match' in item else ''
-                st.markdown(
-                    f'<div class="movie-info">'
-                    f'<span class="movie-rating">⭐ {item["rating"]}/10</span>{match_str}'
-                    f'</div>', 
-                    unsafe_allow_html=True
-                )
-                
-                if st.button(f"{item['title']} ({item['year']})", key=f"{prefix_key}_{item['movie_id']}_{row_start + idx}"):
-                    show_movie_modal(item, prefix=f"{prefix_key}_{row_start + idx}")
+# Helper Function for IMDb-style Horizontal Swipe Carousel Container
+def render_movie_carousel(movies_list, prefix_key):
+    cols = st.columns(len(movies_list))
+    for idx, item in enumerate(movies_list):
+        with cols[idx]:
+            st.image(item['poster'], use_container_width=True)
+            
+            match_str = f' | <span class="movie-match">🎯 {item["match"]}%</span>' if 'match' in item else ''
+            st.markdown(
+                f'<div class="movie-info">'
+                f'<span class="movie-rating">⭐ {item["rating"]}/10</span>{match_str}'
+                f'</div>', 
+                unsafe_allow_html=True
+            )
+            
+            if st.button(f"{item['title']} ({item['year']})", key=f"{prefix_key}_{item['movie_id']}_{idx}"):
+                show_movie_modal(item, prefix=f"{prefix_key}_{idx}")
 
 # --- TAB 1: Discover & Recommendations ---
 if main_tab_choice == "🍿 Discover & Recommendations":
@@ -582,7 +580,7 @@ if main_tab_choice == "🍿 Discover & Recommendations":
                     show_movie_modal(sel_movie, prefix="selected")
 
             st.markdown("---")
-            st.subheader("🍿 Recommended Movies")
+            st.subheader("🍿 Recommended Movies (Swipe Left / Right on Mobile 👈👉)")
 
         if st.session_state.recommendations:
             results = st.session_state.recommendations.copy()
@@ -599,7 +597,7 @@ if main_tab_choice == "🍿 Discover & Recommendations":
             if not results:
                 st.warning(f"⚠️ No recommendations found matching genre '{selected_genre}'.")
             else:
-                render_movie_grid(results, "btn_recs")
+                render_movie_carousel(results, "btn_recs")
 
     with sub_tab2:
         st.subheader("🎲 Mood-Based Movie Finder")
@@ -619,7 +617,7 @@ if main_tab_choice == "🍿 Discover & Recommendations":
         if mood_movies:
             col_m1, col_m2 = st.columns([2, 3])
             with col_m1:
-                st.markdown(f"### 🌟 Mood Pick Recommendations")
+                st.markdown(f"### 🌟 Mood Picks (Swipe 👈👉)")
             with col_m2:
                 if total_mood_pages > 1:
                     st.session_state.mood_page = st.selectbox(
@@ -629,7 +627,7 @@ if main_tab_choice == "🍿 Discover & Recommendations":
                         key="mood_page_selector"
                     )
             
-            render_movie_grid(mood_movies, "btn_mood")
+            render_movie_carousel(mood_movies, "btn_mood")
 
 # --- TAB 2: Global Search Hub ---
 elif main_tab_choice == "🔍 Global Search Hub":
@@ -679,7 +677,7 @@ elif main_tab_choice == "🔍 Global Search Hub":
             start_idx = (st.session_state.person_page - 1) * items_per_page
             page_movies = all_p_movies[start_idx:start_idx + items_per_page]
             
-            render_movie_grid(page_movies, "btn_person")
+            render_movie_carousel(page_movies, "btn_person")
 
     with search_sub_tab2:
         st.subheader("🔍 Explore Movie Franchises & Collections")
@@ -712,8 +710,8 @@ elif main_tab_choice == "🔍 Global Search Hub":
                         st.markdown(f"**Total Movies:** {len(collection['parts'])}")
                         st.write(collection['overview'])
 
-                    st.markdown("### 🎬 Movies in Chronological Order:")
-                    render_movie_grid(collection['parts'], "btn_coll")
+                    st.markdown("### 🎬 Movies in Chronological Order (Swipe 👈👉):")
+                    render_movie_carousel(collection['parts'], "btn_coll")
 
 # --- TAB 3: My Watchlist ---
 elif main_tab_choice == "❤️ My Watchlist":
@@ -722,7 +720,7 @@ elif main_tab_choice == "❤️ My Watchlist":
         st.info("Your watchlist is currently empty. Open any movie details modal and click 'Add to Watchlist' ❤️!")
     else:
         st.markdown(f"You have **{len(st.session_state.watchlist)}** movies saved in your watchlist:")
-        render_movie_grid(st.session_state.watchlist, "btn_watch")
+        render_movie_carousel(st.session_state.watchlist, "btn_watch")
         
         st.markdown("---")
         if st.button("🗑️ Clear Entire Watchlist", type="secondary"):
