@@ -55,7 +55,40 @@ st.markdown("""
     .top-brand span { color: #f5c518; }
     div.stButton > button[kind="secondary"] { background: #19191f; border: 1px solid #35353d; }
     [data-testid="stCaptionContainer"] { color: #b8b8c4; }
+
+    /* More readable dropdowns for movie/person/franchise search results. */
+    div[data-baseweb="popover"] {
+        min-width: 320px !important;
+        max-width: min(560px, 90vw) !important;
+    }
+    div[data-baseweb="popover"] ul[role="listbox"] {
+        max-height: 420px !important;
+        overflow-y: auto !important;
+        padding: 6px !important;
+    }
+    div[data-baseweb="popover"] li[role="option"] {
+        min-height: 46px !important;
+        padding: 10px 14px !important;
+        font-size: 1rem !important;
+        line-height: 1.45 !important;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+        border-radius: 8px !important;
+    }
+    div[data-baseweb="popover"] li[role="option"] * {
+        font-size: inherit !important;
+        line-height: inherit !important;
+    }
+    div[data-baseweb="select"] > div {
+        min-height: 44px;
+    }
+    /* Give Watchlist cards a consistent footprint instead of stretching one movie. */
+    .watchlist-card { min-height: 100%; }
+    .watchlist-card-title { min-height: 2.7rem; font-weight: 750; text-align: center; }
     @media (max-width: 760px) {
+        div[data-baseweb="popover"] { min-width: min(290px, 88vw) !important; }
+        div[data-baseweb="popover"] li[role="option"] { min-height: 44px !important; }
+
         .block-container { padding-left: .7rem; padding-right: .7rem; }
         .movie-section-title { font-size: 1.1rem; }
         div[data-testid="stHorizontalBlock"] { gap: .35rem; }
@@ -1121,26 +1154,31 @@ elif main_tab_choice == "❤️ My Watchlist":
         COLS_PER_ROW = 5
         for row_start in range(0, len(watchlist_items), COLS_PER_ROW):
             row_items = watchlist_items[row_start : row_start + COLS_PER_ROW]
-            cols = st.columns(min(COLS_PER_ROW, len(row_items)))
+            # Always create the same number of columns so a single saved movie
+            # stays card-sized instead of expanding across the entire page.
+            cols = st.columns(COLS_PER_ROW, gap="medium")
             for idx, item in enumerate(row_items):
                 with cols[idx]:
-                    st.image(item['poster'], use_container_width=True)
-                    st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span> · {item["year"]}</div>', unsafe_allow_html=True)
-                    if st.button(f"{item['title']}", key=f"btn_watch_{item['movie_id']}_{row_start + idx}", use_container_width=True):
-                        show_movie_modal(item, prefix=f"watch_{row_start + idx}")
-                    status_options = ["Want to Watch", "Watching", "Watched"]
-                    new_status = st.selectbox("Status", status_options, index=status_options.index(item["status"]) if item["status"] in status_options else 0, key=f"wl_status_{item['movie_id']}")
-                    new_rating = st.slider("Your rating", 0, 10, int(item.get("personal_rating", 0) or 0), key=f"wl_rating_{item['movie_id']}", help="0 means not rated yet")
-                    new_note = st.text_input("Note (optional)", value=item.get("note", ""), key=f"wl_note_{item['movie_id']}", placeholder="Thoughts about this movie…")
-                    if (new_status != item["status"] or new_rating != int(item.get("personal_rating", 0) or 0) or new_note != item.get("note", "")):
-                        for saved in st.session_state.watchlist:
-                            if saved.get("movie_id") == item.get("movie_id"):
-                                saved["status"] = new_status
-                                saved["personal_rating"] = new_rating
-                                saved["note"] = new_note
-                                break
-                        if is_logged_in:
-                            save_user_watchlist(watchlist_owner, st.session_state.watchlist)
+                    with st.container(border=True):
+                        st.image(item['poster'], use_container_width=True)
+                        st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span> · {item["year"]}</div>', unsafe_allow_html=True)
+                        if st.button(f"{item['title']}", key=f"btn_watch_{item['movie_id']}_{row_start + idx}", use_container_width=True):
+                            show_movie_modal(item, prefix=f"watch_{row_start + idx}")
+                        st.caption(f"📌 {item.get('status', 'Want to Watch')}")
+                        with st.expander("✏️ Edit tracker details"):
+                            status_options = ["Want to Watch", "Watching", "Watched"]
+                            new_status = st.selectbox("Status", status_options, index=status_options.index(item["status"]) if item["status"] in status_options else 0, key=f"wl_status_{item['movie_id']}")
+                            new_rating = st.slider("Your rating", 0, 10, int(item.get("personal_rating", 0) or 0), key=f"wl_rating_{item['movie_id']}", help="0 means not rated yet")
+                            new_note = st.text_input("Note (optional)", value=item.get("note", ""), key=f"wl_note_{item['movie_id']}", placeholder="Thoughts about this movie…")
+                            if (new_status != item["status"] or new_rating != int(item.get("personal_rating", 0) or 0) or new_note != item.get("note", "")):
+                                for saved in st.session_state.watchlist:
+                                    if saved.get("movie_id") == item.get("movie_id"):
+                                        saved["status"] = new_status
+                                        saved["personal_rating"] = new_rating
+                                        saved["note"] = new_note
+                                        break
+                                if is_logged_in:
+                                    save_user_watchlist(watchlist_owner, st.session_state.watchlist)
         st.markdown("---")
         if st.button("🗑️ Clear Entire Watchlist", type="secondary", key="clear_watchlist_all"):
             st.session_state.watchlist = []
