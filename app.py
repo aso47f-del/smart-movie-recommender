@@ -506,7 +506,9 @@ def show_movie_modal(item, prefix="modal"):
                     st.image(img_url, use_container_width=True)
                     
                     if st.button(f"👤 {actor.get('name')}", key=f"{prefix}_actor_{actor.get('id')}_{i}"):
-                        st.session_state.main_nav_tab = "🔍 Global Search Hub"
+                        st.session_state.main_nav_tab = "🎭 Actors & Directors"
+                        st.session_state.top_menu_select = "Actors & Directors"
+                        st.session_state.last_top_menu_choice = "Actors & Directors"
                         st.session_state.person_search_input = actor.get('name')
                         st.rerun()
         
@@ -536,13 +538,11 @@ menu_options = {
     "Home": "🏠 Home",
     "Recommendations": "🍿 Discover & Recommendations",
     "Mood Finder": "🎲 Mood Finder",
-    "Movie Franchises": "🔍 Global Search Hub",
-    "Actors & Directors": "🔍 Global Search Hub",
+    "Movie Franchises": "🎞️ Movie Franchises",
+    "Actors & Directors": "🎭 Actors & Directors",
 }
 if "top_menu_select" not in st.session_state:
     st.session_state.top_menu_select = next((k for k, v in menu_options.items() if v == st.session_state.main_nav_tab), "Home")
-if "global_search_mode" not in st.session_state:
-    st.session_state.global_search_mode = "Actors & Directors"
 
 nav_home, nav_watch, nav_search, nav_menu, nav_account = st.columns([1.45, 1.05, 2.35, 1.75, 1.55], vertical_alignment="center")
 with nav_home:
@@ -553,6 +553,8 @@ with nav_home:
 with nav_watch:
     if st.button("♡ Watchlist", use_container_width=True, key="top_watchlist"):
         st.session_state.main_nav_tab = "❤️ My Watchlist"
+        st.session_state.top_menu_select = "Home"
+        st.session_state.last_top_menu_choice = "Home"
         st.rerun()
 with nav_search:
     with st.form("top_movie_search_form", clear_on_submit=False):
@@ -564,6 +566,8 @@ with nav_search:
         if search_submitted:
             st.session_state.top_search_results_query = top_search_query.strip()
             st.session_state.main_nav_tab = "🔎 Movie Search"
+            st.session_state.top_menu_select = "Home"
+            st.session_state.last_top_menu_choice = "Home"
             st.rerun()
 with nav_menu:
     menu_choice = st.selectbox("☰ Menu", list(menu_options.keys()), key="top_menu_select", label_visibility="collapsed")
@@ -573,10 +577,6 @@ with nav_menu:
         st.session_state.last_top_menu_choice = menu_choice
         mapped_choice = menu_options[menu_choice]
         st.session_state.main_nav_tab = mapped_choice
-        if menu_choice == "Movie Franchises":
-            st.session_state.global_search_mode = "Movie Franchises"
-        elif menu_choice == "Actors & Directors":
-            st.session_state.global_search_mode = "Actors & Directors"
         st.rerun()
 with nav_account:
     if is_logged_in:
@@ -624,7 +624,21 @@ elif "watchlist" not in st.session_state:
 # --- HOME: Netflix-style horizontal movie rows ---
 if main_tab_choice == "🏠 Home":
     st.title("Movies worth your time")
-    st.caption("Explore what's trending, discover a new favorite, and save movies to your watchlist.")
+    st.caption("Your personal movie hub — explore what's trending, discover your next favorite, and keep everything you want to watch in one place.")
+    with st.container(border=True):
+        hero_col, action_col = st.columns([3, 1], vertical_alignment="center")
+        with hero_col:
+            st.markdown("### 🍿 Your next favorite is waiting")
+            st.write("Browse popular movies, find a film for your mood, or explore a full franchise from the first movie to the latest.")
+        with action_col:
+            if st.button("🎯 Get Recommendations", use_container_width=True, key="home_hero_recommendations"):
+                st.session_state.main_nav_tab = "🍿 Discover & Recommendations"
+                st.rerun()
+            if st.button("🎞️ Explore Franchises", use_container_width=True, key="home_hero_franchises"):
+                st.session_state.main_nav_tab = "🎞️ Movie Franchises"
+                st.session_state.top_menu_select = "Movie Franchises"
+                st.session_state.last_top_menu_choice = "Movie Franchises"
+                st.rerun()
     render_home_carousel("Trending", "🔥 Trending This Week", "home_trending")
     render_home_carousel("Action", "💥 Action & Adventure", "home_action")
     render_home_carousel("Horror", "👻 Horror", "home_horror")
@@ -785,111 +799,146 @@ elif main_tab_choice == "🎲 Mood Finder":
 
 
 
-# --- TAB 2: Global Search Hub ---
-elif main_tab_choice == "🔍 Global Search Hub":
-    st.radio("Explore", ["Actors & Directors", "Movie Franchises"], horizontal=True, key="global_search_mode", label_visibility="collapsed")
-    
-    if st.session_state.global_search_mode == "Actors & Directors":
-        st.subheader("Search Actor or Director Filmography")
-        
-        person_query = st.text_input("Search for actor or director:", key="person_search_input")
-        
-        selected_person_id = None
-        if person_query:
-            person_results = search_person_tmdb(person_query)
-            if person_results:
-                person_options = {f"{p.get('name')} ({p.get('known_for_department', 'Artist')} - Pop: {round(p.get('popularity', 0), 1)})": p.get('id') for p in person_results}
-                chosen_person = st.selectbox("Select Person:", list(person_options.keys()), key="person_selectbox")
-                selected_person_id = person_options.get(chosen_person)
-                
-        if selected_person_id:
-            if st.button("Show Full Filmography 🎥", type="primary", key="person_btn") or person_query:
-                st.session_state.person_page = 1
-                with st.spinner("Loading complete filmography..."):
-                    st.session_state.person_movies = get_person_filmography(selected_person_id)
-                    
-        if "person_movies" in st.session_state and st.session_state.person_movies:
-            st.markdown("---")
-            all_p_movies = st.session_state.person_movies
-            total_items = len(all_p_movies)
-            items_per_page = 15
-            total_p_pages = (total_items + items_per_page - 1) // items_per_page
-            
-            if "person_page" not in st.session_state:
-                st.session_state.person_page = 1
-                
-            col_p1, col_p2 = st.columns([2, 3])
-            with col_p1:
-                st.markdown(f"### 🎬 Complete Works ({total_items} Movies)")
-            with col_p2:
-                if total_p_pages > 1:
-                    st.session_state.person_page = st.selectbox(
-                        "Select Page:", 
-                        range(1, total_p_pages + 1), 
-                        index=st.session_state.person_page - 1,
-                        key="person_page_selector"
-                    )
-            
-            start_idx = (st.session_state.person_page - 1) * items_per_page
-            page_movies = all_p_movies[start_idx:start_idx + items_per_page]
-            
-            COLS_PER_ROW = 5
-            for row_start in range(0, len(page_movies), COLS_PER_ROW):
-                row_items = page_movies[row_start : row_start + COLS_PER_ROW]
-                cols = st.columns(COLS_PER_ROW)
-                
-                for idx, item in enumerate(row_items):
-                    global_idx = start_idx + row_start + idx
-                    with cols[idx]:
-                        st.image(item['poster'], use_container_width=True)
-                        st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                        if st.button(f"{global_idx + 1}. {item['title']} ({item['year']})", key=f"btn_person_{item['movie_id']}_{global_idx}"):
-                            show_movie_modal(item, prefix=f"person_{global_idx}")
+# --- Actors & Directors: independent people search and filmography page ---
+elif main_tab_choice == "🎭 Actors & Directors":
+    st.title("🎭 Actors & Directors")
+    st.caption("Search performers and directors, explore their filmography, and open any movie for details.")
+    st.subheader("Search Actor or Director Filmography")
 
-    elif st.session_state.global_search_mode == "Movie Franchises":
-        st.subheader("🔍 Explore Movie Franchises & Collections")
-        search_mode = st.radio("Choose exploration mode:", ["Popular Franchises ⭐", "Search Any Franchise 🔍"], horizontal=True, key="franchise_mode_radio")
-        
-        selected_coll_id = None
-        if search_mode == "Popular Franchises ⭐":
-            preset_choice = st.selectbox("Select a Popular Franchise:", list(POPULAR_COLLECTIONS.keys()), key="preset_franchise_sel")
-            selected_coll_id = POPULAR_COLLECTIONS.get(preset_choice)
-        else:
-            franchise_query = st.text_input("Search for any Franchise / Collection:", "", key="franchise_search_input")
-            if franchise_query:
-                coll_results = search_collection_tmdb(franchise_query)
-                if coll_results:
-                    coll_options = {c.get("name"): c.get("id") for c in coll_results}
-                    chosen_coll_name = st.selectbox("Select Collection from results:", list(coll_options.keys()), key="coll_selectbox")
-                    selected_coll_id = coll_options.get(chosen_coll_name)
+    person_query = st.text_input("Search for actor or director:", key="person_search_input")
 
-        if selected_coll_id:
-            with st.spinner("Fetching full franchise chronologically..."):
-                collection = get_collection_details(selected_coll_id)
-                
-                if collection:
-                    st.markdown("---")
-                    col_c1, col_c2 = st.columns([1, 4])
-                    with col_c1:
-                        st.image(collection['poster'], width=180)
-                    with col_c2:
-                        st.markdown(f"## {collection['name']}")
-                        st.markdown(f"**Total Movies:** {len(collection['parts'])}")
-                        st.write(collection['overview'])
+    # Clear the previous person's filmography as soon as the query changes.
+    if st.session_state.get("last_person_query") != person_query:
+        st.session_state.last_person_query = person_query
+        st.session_state.person_movies = []
+        st.session_state.loaded_person_id = None
+        st.session_state.person_page = 1
 
-                    st.markdown("### 🎬 Movies in Chronological Order:")
-                    parts = collection['parts']
-                    COLS_PER_ROW = 5
-                    for row_start in range(0, len(parts), COLS_PER_ROW):
-                        row_items = parts[row_start : row_start + COLS_PER_ROW]
-                        cols = st.columns(COLS_PER_ROW)
-                        
-                        for idx, item in enumerate(row_items):
-                            with cols[idx]:
-                                st.image(item['poster'], use_container_width=True)
-                                st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                                if st.button(f"{idx + row_start + 1}. {item['title']} ({item['year']})", key=f"btn_coll_{item['movie_id']}_{row_start + idx}"):
-                                    show_movie_modal(item, prefix=f"coll_{row_start + idx}")
+    selected_person_id = None
+    selected_person = None
+    if person_query:
+        person_results = search_person_tmdb(person_query)
+        if person_results:
+            person_options = {
+                f"{p.get('name')} ({p.get('known_for_department', 'Artist')} - Pop: {round(p.get('popularity', 0), 1)})": p
+                for p in person_results
+            }
+            chosen_person = st.selectbox("Select Person:", list(person_options.keys()), key="person_selectbox")
+            selected_person = person_options.get(chosen_person)
+            selected_person_id = selected_person.get('id') if selected_person else None
+
+    if selected_person:
+        profile_path = selected_person.get("profile_path")
+        profile_url = f"https://image.tmdb.org/t/p/w342{profile_path}" if profile_path else NO_IMAGE_URL
+        profile_col, details_col = st.columns([1, 4])
+        with profile_col:
+            st.image(profile_url, use_container_width=True)
+        with details_col:
+            st.markdown(f"### {selected_person.get('name', 'Unknown')}")
+            st.write(f"**Department:** {selected_person.get('known_for_department', 'Not listed')}")
+            st.write(f"**Popularity:** {round(selected_person.get('popularity', 0), 1)}")
+            known_for = selected_person.get("known_for", [])
+            known_titles = [item.get("title") or item.get("name") for item in known_for if item.get("title") or item.get("name")]
+            if known_titles:
+                st.write("**Known for:** " + " · ".join(known_titles[:4]))
+
+    if selected_person_id:
+        should_load_filmography = st.session_state.get("loaded_person_id") != selected_person_id
+        if should_load_filmography or st.button("Show Full Filmography 🎥", type="primary", key="person_btn"):
+            st.session_state.person_page = 1
+            with st.spinner("Loading complete filmography..."):
+                st.session_state.person_movies = get_person_filmography(selected_person_id)
+                st.session_state.loaded_person_id = selected_person_id
+
+    if (selected_person_id and st.session_state.get("loaded_person_id") == selected_person_id
+            and st.session_state.get("person_movies")):
+        st.markdown("---")
+        all_p_movies = st.session_state.person_movies
+        total_items = len(all_p_movies)
+        items_per_page = 15
+        total_p_pages = (total_items + items_per_page - 1) // items_per_page
+
+        if "person_page" not in st.session_state:
+            st.session_state.person_page = 1
+
+        col_p1, col_p2 = st.columns([2, 3])
+        with col_p1:
+            st.markdown(f"### 🎬 Complete Works ({total_items} Movies)")
+        with col_p2:
+            if total_p_pages > 1:
+                st.session_state.person_page = st.selectbox(
+                    "Select Page:", 
+                    range(1, total_p_pages + 1), 
+                    index=st.session_state.person_page - 1,
+                    key="person_page_selector"
+                )
+
+        start_idx = (st.session_state.person_page - 1) * items_per_page
+        page_movies = all_p_movies[start_idx:start_idx + items_per_page]
+
+        COLS_PER_ROW = 5
+        for row_start in range(0, len(page_movies), COLS_PER_ROW):
+            row_items = page_movies[row_start : row_start + COLS_PER_ROW]
+            cols = st.columns(COLS_PER_ROW)
+
+            for idx, item in enumerate(row_items):
+                global_idx = start_idx + row_start + idx
+                with cols[idx]:
+                    st.image(item['poster'], use_container_width=True)
+                    st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
+                    if st.button(f"{global_idx + 1}. {item['title']} ({item['year']})", key=f"btn_person_{item['movie_id']}_{global_idx}"):
+                        show_movie_modal(item, prefix=f"person_{global_idx}")
+
+
+
+# --- Movie Franchises: independent collections page ---
+elif main_tab_choice == "🎞️ Movie Franchises":
+    st.title("🎞️ Movie Franchises")
+    st.caption("Browse popular franchises or search for any movie collection, then explore its films in order.")
+    st.subheader("🔍 Explore Movie Franchises & Collections")
+    search_mode = st.radio("Choose exploration mode:", ["Popular Franchises ⭐", "Search Any Franchise 🔍"], horizontal=True, key="franchise_mode_radio")
+
+    selected_coll_id = None
+    if search_mode == "Popular Franchises ⭐":
+        preset_choice = st.selectbox("Select a Popular Franchise:", list(POPULAR_COLLECTIONS.keys()), key="preset_franchise_sel")
+        selected_coll_id = POPULAR_COLLECTIONS.get(preset_choice)
+    else:
+        franchise_query = st.text_input("Search for any Franchise / Collection:", "", key="franchise_search_input")
+        if franchise_query:
+            coll_results = search_collection_tmdb(franchise_query)
+            if coll_results:
+                coll_options = {c.get("name"): c.get("id") for c in coll_results}
+                chosen_coll_name = st.selectbox("Select Collection from results:", list(coll_options.keys()), key="coll_selectbox")
+                selected_coll_id = coll_options.get(chosen_coll_name)
+
+    if selected_coll_id:
+        with st.spinner("Fetching full franchise chronologically..."):
+            collection = get_collection_details(selected_coll_id)
+
+            if collection:
+                st.markdown("---")
+                col_c1, col_c2 = st.columns([1, 4])
+                with col_c1:
+                    st.image(collection['poster'], width=180)
+                with col_c2:
+                    st.markdown(f"## {collection['name']}")
+                    st.markdown(f"**Total Movies:** {len(collection['parts'])}")
+                    st.write(collection['overview'])
+
+                st.markdown("### 🎬 Movies in Chronological Order:")
+                parts = collection['parts']
+                COLS_PER_ROW = 5
+                for row_start in range(0, len(parts), COLS_PER_ROW):
+                    row_items = parts[row_start : row_start + COLS_PER_ROW]
+                    cols = st.columns(COLS_PER_ROW)
+
+                    for idx, item in enumerate(row_items):
+                        with cols[idx]:
+                            st.image(item['poster'], use_container_width=True)
+                            st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
+                            if st.button(f"{idx + row_start + 1}. {item['title']} ({item['year']})", key=f"btn_coll_{item['movie_id']}_{row_start + idx}"):
+                                show_movie_modal(item, prefix=f"coll_{row_start + idx}")
+
 
 # --- TAB 3: My Watchlist ---
 elif main_tab_choice == "❤️ My Watchlist":
