@@ -10,77 +10,89 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. CSS Styling for Smooth Transitions, Modern Clean UI & Fixed Mobile Layout
+# 2. CSS Styling for Touch-Friendly Horizontal Carousel & Responsive UI
 st.markdown("""
     <style>
     @keyframes fadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(6px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 
     .block-container, div[data-testid="stVerticalBlock"] > div {
         animation: fadeIn 0.35s ease-in-out;
     }
 
-    div[data-testid="stImage"] img {
+    /* Modern Scrollable Horizontal Carousel Container */
+    .carousel-container {
+        display: flex;
+        overflow-x: auto;
+        gap: 14px;
+        padding: 8px 4px 16px 4px;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+    }
+    .carousel-container::-webkit-scrollbar {
+        height: 6px;
+    }
+    .carousel-container::-webkit-scrollbar-thumb {
+        background: #4a4e69;
+        border-radius: 10px;
+    }
+
+    /* Individual Movie Card inside Carousel */
+    .movie-card {
+        flex: 0 0 160px;
+        scroll-snap-align: start;
+        background-color: #1e1e2e;
         border-radius: 12px;
-        transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+        padding: 8px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+    .movie-card img {
+        width: 100%;
+        height: 220px;
         object-fit: cover;
+        border-radius: 8px;
     }
-    div[data-testid="stImage"] img:hover {
-        transform: scale(1.03);
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
-    }
-    .movie-info {
-        font-size: 0.85rem;
+
+    .movie-card-info {
+        font-size: 0.8rem;
         font-weight: 600;
-        margin-bottom: 0.4rem;
         text-align: center;
+        margin: 6px 0;
     }
+
     .movie-rating { color: #ffb703; }
     .movie-match { color: #2ec4b6; }
-    
+
+    /* Button Styling inside Cards */
     div.stButton > button {
         width: 100% !important;
         border-radius: 8px;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         font-weight: 700;
-        height: 2.8rem;
+        height: 2.6rem;
         white-space: normal;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
-    /* --- Perfect Mobile Grid & Responsiveness --- */
+    /* Fix Modal elements on Mobile */
     @media (max-width: 768px) {
-        body {
-            overflow-x: hidden;
-        }
         .block-container {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
+            padding-left: 0.6rem !important;
+            padding-right: 0.6rem !important;
             padding-top: 1rem !important;
         }
-        /* ضبط بوسترات الأفلام بحجم متناسق ومناسب للشاشة */
-        div[data-testid="stImage"] img {
-            max-height: 240px !important;
-            width: 100% !important;
-            object-fit: cover !important;
+        .movie-card {
+            flex: 0 0 145px;
         }
-        /* تحسين مظهر الأزرار والعناوين على الموبايل */
-        div.stButton > button {
-            font-size: 0.75rem !important;
-            height: 2.6rem !important;
-            padding: 2px 4px !important;
-        }
-        .movie-info {
-            font-size: 0.75rem !important;
+        .movie-card img {
+            height: 200px;
         }
     }
     </style>
@@ -404,12 +416,12 @@ def show_movie_modal(item, prefix="modal"):
         
         if cast:
             st.markdown("**👥 Top Cast (Click actor name to view filmography):**")
-            cast_cols = st.columns(len(cast))
+            cast_cols = st.columns(min(len(cast), 4))
             for i, actor in enumerate(cast):
                 with cast_cols[i]:
                     profile_path = actor.get("profile_path")
                     img_url = f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else NO_IMAGE_URL
-                    st.image(img_url, use_container_width=True)
+                    st.image(img_url, width=90)
                     
                     if st.button(f"👤 {actor.get('name')}", key=f"{prefix}_actor_{actor.get('id')}_{i}"):
                         st.session_state.main_nav_tab = "🔍 Global Search Hub"
@@ -436,7 +448,7 @@ def show_movie_modal(item, prefix="modal"):
 
 # Sidebar Controls & Filters
 st.sidebar.header("⚙️ Controls & Filters")
-num_recommendations = st.sidebar.slider("Number of Movies:", min_value=3, max_value=20, value=6, key="num_movies_slider")
+num_recommendations = st.sidebar.slider("Number of Movies:", min_value=3, max_value=20, value=10, key="num_movies_slider")
 
 sort_option = st.sidebar.selectbox(
     "Sort Recommendations By:",
@@ -481,7 +493,7 @@ st.markdown("---")
 if "watchlist" not in st.session_state:
     st.session_state.watchlist = []
 
-# Helper Function to Render Movie Grid Safely Across Desktop & Mobile
+# Helper Function to Render Responsive Horizontal Touch Carousel / Grid
 def render_movie_grid(movies_list, prefix_key):
     COLS_PER_ROW = 5
     for row_start in range(0, len(movies_list), COLS_PER_ROW):
@@ -492,7 +504,6 @@ def render_movie_grid(movies_list, prefix_key):
             with cols[idx]:
                 st.image(item['poster'], use_container_width=True)
                 
-                # Match or Rating info
                 match_str = f' | <span class="movie-match">🎯 {item["match"]}%</span>' if 'match' in item else ''
                 st.markdown(
                     f'<div class="movie-info">'
@@ -501,7 +512,6 @@ def render_movie_grid(movies_list, prefix_key):
                     unsafe_allow_html=True
                 )
                 
-                # Clean full-width action button below poster
                 if st.button(f"{item['title']} ({item['year']})", key=f"{prefix_key}_{item['movie_id']}_{row_start + idx}"):
                     show_movie_modal(item, prefix=f"{prefix_key}_{row_start + idx}")
 
