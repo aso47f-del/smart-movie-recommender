@@ -4,7 +4,6 @@ import random
 import time
 import json
 import os
-from streamlit_google_auth import Authenticate
 
 # 1. Page Configuration
 st.set_page_config(
@@ -68,13 +67,13 @@ except Exception:
     st.error("Please configure TMDB_API_KEY in Streamlit secrets.")
     st.stop()
 
-# Helper Functions for Persistent Watchlist per Google User Email
-def get_watchlist_filename(email):
-    safe_email = "".join([c if c.isalnum() else "_" for c in email])
-    return f"watchlist_{safe_email}.json"
+# Helper Functions for Persistent Watchlist per User
+def get_watchlist_filename(username):
+    safe_username = "".join([c if c.isalnum() else "_" for c in username])
+    return f"watchlist_{safe_username}.json"
 
-def load_user_watchlist(email):
-    filename = get_watchlist_filename(email)
+def load_user_watchlist(username):
+    filename = get_watchlist_filename(username)
     if os.path.exists(filename):
         try:
             with open(filename, "r", encoding="utf-8") as f:
@@ -83,41 +82,42 @@ def load_user_watchlist(email):
             return []
     return []
 
-def save_user_watchlist(email, watchlist):
-    filename = get_watchlist_filename(email)
+def save_user_watchlist(username, watchlist):
+    filename = get_watchlist_filename(username)
     try:
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(watchlist, f, ensure_ascii=False, indent=4)
     except Exception:
         pass
 
-# Initialize Google Authenticator
-# Initialize Google Authenticator safely
-authenticator = Authenticate(
-    client_id=st.secrets["google_auth"]["client_id"],
-    client_secret=st.secrets["google_auth"]["client_secret"],
-    redirect_uri=st.secrets["google_auth"]["redirect_uri"],
-    cookie_secret=st.secrets.get("cookie_secret", "super_secret_movie_hub_key"),
-    token_key=st.secrets.get("token_key", "google_token")
-)
+# Authentication State
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "username" not in st.session_state:
+    st.session_state.username = ""
 
-# Check user authentication status via Google
-check_auth = authenticator.check_auth()
-
-if not check_auth:
+# --- LOGIN SCREEN ---
+if not st.session_state.authenticated:
     st.markdown("<h1 style='text-align: center;'>🎬 Smart Live Movie Hub</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'>Sign in with your Google account to access your personalized watchlist and recommendations.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'>Please sign in to access your personal watchlist and recommendations.</p>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # Render Google Sign-In button
-        authenticator.login()
+        with st.form("login_form"):
+            username_input = st.text_input("Username (e.g., ahmed)")
+            password_input = st.text_input("Password", type="password")
+            submit_login = st.form_submit_button("Sign In 🚀", use_container_width=True)
+            
+            if submit_login:
+                if username_input.strip():
+                    st.session_state.authenticated = True
+                    st.session_state.username = username_input.strip()
+                    st.session_state.watchlist = load_user_watchlist(username_input.strip())
+                    st.toast("Signed in successfully!", icon="✅")
+                    st.rerun()
+                else:
+                    st.error("Please enter a valid username.")
     st.stop()
-
-# If authenticated successfully, retrieve user info
-user_info = st.session_state.get("user_info", {})
-user_email = user_info.get("email", "user@gmail.com")
-user_name = user_info.get("name", "Movie Fan")
 
 NO_IMAGE_URL = "https://via.placeholder.com/500x750?text=No+Poster+Available"
 
@@ -408,19 +408,19 @@ def show_movie_modal(item, prefix="modal"):
             st.markdown(f"[🔗 Open in IMDb](https://www.imdb.com/title/{imdb_id})")
         
         if "watchlist" not in st.session_state:
-            st.session_state.watchlist = load_user_watchlist(user_email)
+            st.session_state.watchlist = load_user_watchlist(st.session_state.username)
         
         is_in_watchlist = any(m['movie_id'] == item['movie_id'] for m in st.session_state.watchlist)
         if not is_in_watchlist:
             if st.button("❤️ Add to Watchlist", key=f"{prefix}_add_{item['movie_id']}"):
                 st.session_state.watchlist.append(item)
-                save_user_watchlist(user_email, st.session_state.watchlist)
+                save_user_watchlist(st.session_state.username, st.session_state.watchlist)
                 st.toast("Added to watchlist! ❤️", icon="✅")
                 st.rerun()
         else:
             if st.button("❌ Remove from Watchlist", key=f"{prefix}_rem_{item['movie_id']}"):
                 st.session_state.watchlist = [m for m in st.session_state.watchlist if m['movie_id'] != item['movie_id']]
-                save_user_watchlist(user_email, st.session_state.watchlist)
+                save_user_watchlist(st.session_state.username, st.session_state.watchlist)
                 st.toast("Removed from watchlist.", icon="🗑️")
                 st.rerun()
         
@@ -463,10 +463,12 @@ def show_movie_modal(item, prefix="modal"):
             st.info("No trailer video available for this movie.")
 
 # Sidebar Controls & Filters
-st.sidebar.markdown(f"👤 **{user_name}**")
-st.sidebar.caption(user_email)
+st.sidebar.markdown(f"👤 **{st.session_state.username}**")
 if st.sidebar.button("Sign Out 🚪", use_container_width=True):
-    authenticator.logout()
+    st.session_state.authenticated = False
+    st.session_state.username = ""
+    st.session_state.watchlist = []
+    st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.header("⚙️ Controls & Filters")
@@ -513,7 +515,7 @@ main_tab_choice = st.radio(
 st.markdown("---")
 
 if "watchlist" not in st.session_state:
-    st.session_state.watchlist = load_user_watchlist(user_email)
+    st.session_state.watchlist = load_user_watchlist(st.session_state.username)
 
 # --- TAB 1: Discover & Recommendations ---
 if main_tab_choice == "🍿 Discover & Recommendations":
@@ -746,7 +748,7 @@ elif main_tab_choice == "🔍 Global Search Hub":
 
 # --- TAB 3: My Watchlist ---
 elif main_tab_choice == "❤️ My Watchlist":
-    st.subheader(f"❤️ {user_name}'s Personal Watchlist")
+    st.subheader(f"❤️ {st.session_state.username}'s Personal Watchlist")
     if not st.session_state.watchlist:
         st.info("Your watchlist is currently empty. Open any movie details modal and click 'Add to Watchlist' ❤️!")
     else:
@@ -768,6 +770,6 @@ elif main_tab_choice == "❤️ My Watchlist":
         st.markdown("---")
         if st.button("🗑️ Clear Entire Watchlist", type="secondary"):
             st.session_state.watchlist = []
-            save_user_watchlist(user_email, st.session_state.watchlist)
+            save_user_watchlist(st.session_state.username, st.session_state.watchlist)
             st.toast("Watchlist cleared successfully.", icon="🧹")
             st.rerun()
