@@ -190,6 +190,18 @@ def search_person_tmdb(query):
         st.toast("⚠️ Error searching persons.", icon="⚠️")
     return []
 
+@st.cache_data(show_spinner=False, ttl=86400)
+def get_person_details(person_id):
+    """Fetch biography and personal details for an actor/director from TMDB."""
+    url = f"https://api.themoviedb.org/3/person/{person_id}?api_key={API_KEY}&language=en-US"
+    try:
+        res = requests.get(url, timeout=8)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        st.toast("⚠️ Unable to load this person's biography right now.", icon="⚠️")
+    return {}
+
 @st.cache_data(show_spinner=False, ttl=604800)
 def get_person_filmography(person_id):
     url = f"https://api.themoviedb.org/3/person/{person_id}/movie_credits?api_key={API_KEY}&language=en-US"
@@ -623,22 +635,9 @@ elif "watchlist" not in st.session_state:
 
 # --- HOME: Netflix-style horizontal movie rows ---
 if main_tab_choice == "🏠 Home":
-    st.title("Movies worth your time")
-    st.caption("Your personal movie hub — explore what's trending, discover your next favorite, and keep everything you want to watch in one place.")
-    with st.container(border=True):
-        hero_col, action_col = st.columns([3, 1], vertical_alignment="center")
-        with hero_col:
-            st.markdown("### 🍿 Your next favorite is waiting")
-            st.write("Browse popular movies, find a film for your mood, or explore a full franchise from the first movie to the latest.")
-        with action_col:
-            if st.button("🎯 Get Recommendations", use_container_width=True, key="home_hero_recommendations"):
-                st.session_state.main_nav_tab = "🍿 Discover & Recommendations"
-                st.rerun()
-            if st.button("🎞️ Explore Franchises", use_container_width=True, key="home_hero_franchises"):
-                st.session_state.main_nav_tab = "🎞️ Movie Franchises"
-                st.session_state.top_menu_select = "Movie Franchises"
-                st.session_state.last_top_menu_choice = "Movie Franchises"
-                st.rerun()
+    # Keep Home focused on browsing; discovery pages are already available in the menu.
+    st.title("🎬 Discover Movies")
+    st.caption("Trending picks, genre favorites, and top-rated movies — all in one place.")
     render_home_carousel("Trending", "🔥 Trending This Week", "home_trending")
     render_home_carousel("Action", "💥 Action & Adventure", "home_action")
     render_home_carousel("Horror", "👻 Horror", "home_horror")
@@ -828,19 +827,33 @@ elif main_tab_choice == "🎭 Actors & Directors":
             selected_person_id = selected_person.get('id') if selected_person else None
 
     if selected_person:
-        profile_path = selected_person.get("profile_path")
+        person_details = get_person_details(selected_person.get("id")) if selected_person.get("id") else {}
+        profile_path = person_details.get("profile_path") or selected_person.get("profile_path")
         profile_url = f"https://image.tmdb.org/t/p/w342{profile_path}" if profile_path else NO_IMAGE_URL
-        profile_col, details_col = st.columns([1, 4])
+        profile_col, details_col = st.columns([1, 3], vertical_alignment="top")
         with profile_col:
             st.image(profile_url, use_container_width=True)
         with details_col:
-            st.markdown(f"### {selected_person.get('name', 'Unknown')}")
-            st.write(f"**Department:** {selected_person.get('known_for_department', 'Not listed')}")
-            st.write(f"**Popularity:** {round(selected_person.get('popularity', 0), 1)}")
+            st.markdown(f"### {person_details.get('name') or selected_person.get('name', 'Unknown')}")
+            st.write(f"**Department:** {person_details.get('known_for_department') or selected_person.get('known_for_department', 'Not listed')}")
+            if person_details.get("birthday"):
+                birth_line = f"**Born:** {person_details['birthday']}"
+                if person_details.get("place_of_birth"):
+                    birth_line += f" — {person_details['place_of_birth']}"
+                st.markdown(birth_line)
+            if person_details.get("deathday"):
+                st.write(f"**Died:** {person_details['deathday']}")
+            st.write(f"**Popularity:** {round(person_details.get('popularity', selected_person.get('popularity', 0)) or 0, 1)}")
             known_for = selected_person.get("known_for", [])
             known_titles = [item.get("title") or item.get("name") for item in known_for if item.get("title") or item.get("name")]
             if known_titles:
                 st.write("**Known for:** " + " · ".join(known_titles[:4]))
+            biography = (person_details.get("biography") or "").strip()
+            if biography:
+                st.markdown("**Biography**")
+                st.write(biography)
+            else:
+                st.info("No biography is available for this person in TMDB yet. Basic profile details and filmography are shown when available.")
 
     if selected_person_id:
         should_load_filmography = st.session_state.get("loaded_person_id") != selected_person_id
