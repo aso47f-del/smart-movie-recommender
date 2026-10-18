@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. CSS Styling for Smooth Transitions & Modern Clean UI
+# 2. CSS Styling for Smooth Transitions, Modern Clean UI & Mobile Responsiveness
 st.markdown("""
     <style>
     @keyframes fadeIn {
@@ -45,7 +45,6 @@ st.markdown("""
     .movie-rating { color: #ffb703; }
     .movie-match { color: #2ec4b6; }
     
-    /* Make movie buttons look clean and full-width for card title click */
     div.stButton > button {
         width: 100%;
         border-radius: 8px;
@@ -55,6 +54,19 @@ st.markdown("""
         white-space: normal;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+
+    /* Mobile Responsiveness Optimizations */
+    @media (max-width: 768px) {
+        .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-top: 1.5rem !important;
+        }
+        div.stButton > button {
+            font-size: 0.8rem;
+            height: 2.4rem;
+        }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -534,7 +546,6 @@ if main_tab_choice == "🍿 Discover & Recommendations":
                                 f'</div>', 
                                 unsafe_allow_html=True
                             )
-                            # Clicking title button opens modal directly
                             if st.button(f"{item['title']} ({item['year']})", key=f"btn_recs_{item['movie_id']}_{row_start + idx}"):
                                 show_movie_modal(item, prefix=f"recs_{row_start + idx}")
 
