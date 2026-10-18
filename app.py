@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. CSS Styling for Touch-Friendly Horizontal Carousel & Responsive UI
+# 2. CSS Styling for IMDb/Netflix Style Mobile UI & App-like Cards
 st.markdown("""
     <style>
     @keyframes fadeIn {
@@ -22,77 +22,83 @@ st.markdown("""
         animation: fadeIn 0.35s ease-in-out;
     }
 
-    /* Modern Scrollable Horizontal Carousel Container */
-    .carousel-container {
-        display: flex;
-        overflow-x: auto;
-        gap: 14px;
-        padding: 8px 4px 16px 4px;
-        scroll-snap-type: x mandatory;
-        -webkit-overflow-scrolling: touch;
-    }
-    .carousel-container::-webkit-scrollbar {
-        height: 6px;
-    }
-    .carousel-container::-webkit-scrollbar-thumb {
-        background: #4a4e69;
+    /* Poster Styling */
+    div[data-testid="stImage"] img {
         border-radius: 10px;
-    }
-
-    /* Individual Movie Card inside Carousel */
-    .movie-card {
-        flex: 0 0 160px;
-        scroll-snap-align: start;
-        background-color: #1e1e2e;
-        border-radius: 12px;
-        padding: 8px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-    }
-
-    .movie-card img {
-        width: 100%;
-        height: 220px;
+        transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
         object-fit: cover;
-        border-radius: 8px;
     }
-
-    .movie-card-info {
+    div[data-testid="stImage"] img:hover {
+        transform: scale(1.02);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    }
+    
+    .movie-info {
         font-size: 0.8rem;
         font-weight: 600;
+        margin-bottom: 0.3rem;
         text-align: center;
-        margin: 6px 0;
     }
-
     .movie-rating { color: #ffb703; }
     .movie-match { color: #2ec4b6; }
-
-    /* Button Styling inside Cards */
+    
+    /* Modern Touch Button Styling */
     div.stButton > button {
         width: 100% !important;
         border-radius: 8px;
         font-size: 0.8rem;
         font-weight: 700;
-        height: 2.6rem;
+        height: 2.5rem;
         white-space: normal;
         overflow: hidden;
         text-overflow: ellipsis;
+        background-color: #1f1f2e;
+        border: 1px solid #3f3f59;
+        color: #ffffff;
+    }
+    div.stButton > button:hover {
+        background-color: #2e2e42;
+        border-color: #ffb703;
     }
 
-    /* Fix Modal elements on Mobile */
+    /* --- IMDb/Netflix Style Mobile Optimization --- */
     @media (max-width: 768px) {
+        body {
+            overflow-x: hidden;
+        }
         .block-container {
-            padding-left: 0.6rem !important;
-            padding-right: 0.6rem !important;
-            padding-top: 1rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+            padding-top: 0.8rem !important;
         }
-        .movie-card {
-            flex: 0 0 145px;
+        /* فرض عرض عمودين متناسقين تماماً على الموبايل مثل تطبيقات البث */
+        div[data-testid="stHorizontalBlock"] {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 0px !important;
         }
-        .movie-card img {
-            height: 200px;
+        div[data-testid="column"] {
+            width: 48% !important;
+            flex: 1 1 48% !important;
+            min-width: 48% !important;
+            max-width: 48% !important;
+            margin-bottom: 0.8rem !important;
+            padding: 0 3px !important;
+        }
+        /* تثبيت أبعاد بوسترات الأفلام لتكون كارديو مظبوطة مش ضخمة */
+        div[data-testid="stImage"] img {
+            height: 210px !important;
+            width: 100% !important;
+            object-fit: cover !important;
+            border-radius: 8px !important;
+        }
+        div.stButton > button {
+            font-size: 0.72rem !important;
+            height: 2.4rem !important;
+            padding: 0px 2px !important;
+        }
+        .movie-info {
+            font-size: 0.72rem !important;
         }
     }
     </style>
@@ -415,7 +421,7 @@ def show_movie_modal(item, prefix="modal"):
         st.write(overview)
         
         if cast:
-            st.markdown("**👥 Top Cast (Click actor name to view filmography):**")
+            st.markdown("**👥 Top Cast:**")
             cast_cols = st.columns(min(len(cast), 4))
             for i, actor in enumerate(cast):
                 with cast_cols[i]:
@@ -493,7 +499,7 @@ st.markdown("---")
 if "watchlist" not in st.session_state:
     st.session_state.watchlist = []
 
-# Helper Function to Render Responsive Horizontal Touch Carousel / Grid
+# Helper Function for Clean Responsive Movie Grid
 def render_movie_grid(movies_list, prefix_key):
     COLS_PER_ROW = 5
     for row_start in range(0, len(movies_list), COLS_PER_ROW):
