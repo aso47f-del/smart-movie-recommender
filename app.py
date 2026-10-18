@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. CSS Styling for IMDb/Netflix Style Mobile UI & App-like Cards
+# 2. CSS Styling for Professional Mobile App UI & PC Layout
 st.markdown("""
     <style>
     @keyframes fadeIn {
@@ -22,7 +22,7 @@ st.markdown("""
         animation: fadeIn 0.35s ease-in-out;
     }
 
-    /* Poster Styling */
+    /* Poster Styling for PC */
     div[data-testid="stImage"] img {
         border-radius: 10px;
         transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
@@ -42,13 +42,13 @@ st.markdown("""
     .movie-rating { color: #ffb703; }
     .movie-match { color: #2ec4b6; }
     
-    /* Modern Touch Button Styling */
+    /* Button Styling */
     div.stButton > button {
         width: 100% !important;
         border-radius: 8px;
         font-size: 0.8rem;
         font-weight: 700;
-        height: 2.5rem;
+        height: 2.6rem;
         white-space: normal;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -61,44 +61,57 @@ st.markdown("""
         border-color: #ffb703;
     }
 
-    /* --- IMDb/Netflix Style Mobile Optimization --- */
+    /* --- Ultimate Mobile App-Like Experience (IMDb/Netflix Style) --- */
     @media (max-width: 768px) {
         body {
             overflow-x: hidden;
+            background-color: #0e0e17;
         }
         .block-container {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
+            padding-left: 0.4rem !important;
+            padding-right: 0.4rem !important;
             padding-top: 0.8rem !important;
         }
-        /* فرض عرض عمودين متناسقين تماماً على الموبايل مثل تطبيقات البث */
+        
+        /* تحويل الأعمدة على الموبايل لشكل كاردز (Cards) منظمة في عمودين */
         div[data-testid="stHorizontalBlock"] {
             display: flex !important;
             flex-wrap: wrap !important;
-            gap: 0px !important;
+            gap: 8px !important;
         }
         div[data-testid="column"] {
-            width: 48% !important;
-            flex: 1 1 48% !important;
-            min-width: 48% !important;
-            max-width: 48% !important;
-            margin-bottom: 0.8rem !important;
-            padding: 0 3px !important;
+            width: calc(50% - 4px) !important;
+            flex: 1 1 calc(50% - 4px) !important;
+            min-width: calc(50% - 4px) !important;
+            max-width: calc(50% - 4px) !important;
+            margin-bottom: 10px !important;
+            background: #161622 !important;
+            border-radius: 12px !important;
+            padding: 6px !important;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
+            border: 1px solid #232333 !important;
         }
-        /* تثبيت أبعاد بوسترات الأفلام لتكون كارديو مظبوطة مش ضخمة */
+        
+        /* تثبيت أبعاد البوسترات بنسبة موحدة ومنع تمددها بـ aspect-ratio */
         div[data-testid="stImage"] img {
-            height: 210px !important;
             width: 100% !important;
+            aspect-ratio: 2/3 !important;
+            height: auto !important;
             object-fit: cover !important;
             border-radius: 8px !important;
         }
+        
+        /* تصغير حجم الأزرار والنصوص لتناسب شاشات التاتش بشكل أنيق */
         div.stButton > button {
             font-size: 0.72rem !important;
             height: 2.4rem !important;
             padding: 0px 2px !important;
+            background-color: #22223b !important;
+            border: none !important;
         }
         .movie-info {
-            font-size: 0.72rem !important;
+            font-size: 0.7rem !important;
+            margin-top: 4px;
         }
     }
     </style>
@@ -499,7 +512,7 @@ st.markdown("---")
 if "watchlist" not in st.session_state:
     st.session_state.watchlist = []
 
-# Helper Function for Clean Responsive Movie Grid
+# Helper Function for Clean Movie Grid Cards
 def render_movie_grid(movies_list, prefix_key):
     COLS_PER_ROW = 5
     for row_start in range(0, len(movies_list), COLS_PER_ROW):
