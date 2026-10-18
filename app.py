@@ -98,8 +98,7 @@ authenticator = Authenticate(
     client_secret=st.secrets["google_auth"]["client_secret"],
     redirect_uri=st.secrets["google_auth"]["redirect_uri"],
     cookie_secret=st.secrets.get("cookie_secret", "super_secret_movie_hub_key"),
-    token_key=st.secrets.get("token_key", "google_token"),
-    scopes=["https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"]
+    token_key=st.secrets.get("token_key", "google_token")
 )
 
 # Check user authentication status via Google
