@@ -2,6 +2,8 @@ import streamlit as st
 import requests
 import random
 import time
+import json
+import os
 
 # 1. Page Configuration
 st.set_page_config(
@@ -45,7 +47,6 @@ st.markdown("""
     .movie-rating { color: #ffb703; }
     .movie-match { color: #2ec4b6; }
     
-    /* Make movie buttons look clean and full-width for card title click */
     div.stButton > button {
         width: 100%;
         border-radius: 8px;
@@ -59,11 +60,65 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Secure API Key Management
+# 3. Secure API Key Management & User Authentication Setup
 try:
     API_KEY = st.secrets["TMDB_API_KEY"]
 except Exception:
     st.error("Please configure TMDB_API_KEY in Streamlit secrets.")
+    st.stop()
+
+# Helper Functions for Persistent Watchlist per User
+def get_watchlist_filename(username):
+    safe_username = "".join([c if c.isalnum() else "_" for c in username])
+    return f"watchlist_{safe_username}.json"
+
+def load_user_watchlist(username):
+    filename = get_watchlist_filename(username)
+    if os.path.exists(filename):
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_user_watchlist(username, watchlist):
+    filename = get_watchlist_filename(username)
+    try:
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(watchlist, f, ensure_ascii=False, indent=4)
+    except Exception:
+        pass
+
+# Authentication State
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "username" not in st.session_state:
+    st.session_state.username = ""
+
+# --- LOGIN SCREEN ---
+if not st.session_state.authenticated:
+    st.markdown("<h1 style='text-align: center;'>🎬 Smart Live Movie Hub</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'>Please sign in to access your personal watchlist and recommendations.</p>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        with st.form("login_form"):
+            username_input = st.text_input("Username")
+            password_input = st.text_input("Password", type="password")
+            submit_login = st.form_submit_button("Sign In 🚀", use_container_width=True)
+            
+            if submit_login:
+                # Basic authentication check from secrets or default demo account
+                valid_users = st.secrets.get("users", {"admin": "password123", "user": "user123"})
+                if username_input in valid_users and valid_users[username_input] == password_input:
+                    st.session_state.authenticated = True
+                    st.session_state.username = username_input
+                    st.session_state.watchlist = load_user_watchlist(username_input)
+                    st.toast("Signed in successfully!", icon="✅")
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password.")
     st.stop()
 
 NO_IMAGE_URL = "https://via.placeholder.com/500x750?text=No+Poster+Available"
@@ -94,7 +149,7 @@ MOOD_OPTIONS = {
     "Romance & Drama 💖": {"genres": "10749,18", "sort": "vote_average.desc"}
 }
 
-# --- API Functions ---
+# --- API Functions with Optimized Caching TTL ---
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_movie_tmdb(query):
@@ -355,17 +410,19 @@ def show_movie_modal(item, prefix="modal"):
             st.markdown(f"[🔗 Open in IMDb](https://www.imdb.com/title/{imdb_id})")
         
         if "watchlist" not in st.session_state:
-            st.session_state.watchlist = []
+            st.session_state.watchlist = load_user_watchlist(st.session_state.username)
         
         is_in_watchlist = any(m['movie_id'] == item['movie_id'] for m in st.session_state.watchlist)
         if not is_in_watchlist:
             if st.button("❤️ Add to Watchlist", key=f"{prefix}_add_{item['movie_id']}"):
                 st.session_state.watchlist.append(item)
+                save_user_watchlist(st.session_state.username, st.session_state.watchlist)
                 st.toast("Added to watchlist! ❤️", icon="✅")
                 st.rerun()
         else:
             if st.button("❌ Remove from Watchlist", key=f"{prefix}_rem_{item['movie_id']}"):
                 st.session_state.watchlist = [m for m in st.session_state.watchlist if m['movie_id'] != item['movie_id']]
+                save_user_watchlist(st.session_state.username, st.session_state.watchlist)
                 st.toast("Removed from watchlist.", icon="🗑️")
                 st.rerun()
         
@@ -408,6 +465,14 @@ def show_movie_modal(item, prefix="modal"):
             st.info("No trailer video available for this movie.")
 
 # Sidebar Controls & Filters
+st.sidebar.header(f"👤 Welcome, {st.session_state.username}")
+if st.sidebar.button("Sign Out 🚪", use_container_width=True):
+    st.session_state.authenticated = False
+    st.session_state.username = ""
+    st.session_state.watchlist = []
+    st.rerun()
+
+st.sidebar.markdown("---")
 st.sidebar.header("⚙️ Controls & Filters")
 num_recommendations = st.sidebar.slider("Number of Movies:", min_value=3, max_value=20, value=6, key="num_movies_slider")
 
@@ -452,7 +517,7 @@ main_tab_choice = st.radio(
 st.markdown("---")
 
 if "watchlist" not in st.session_state:
-    st.session_state.watchlist = []
+    st.session_state.watchlist = load_user_watchlist(st.session_state.username)
 
 # --- TAB 1: Discover & Recommendations ---
 if main_tab_choice == "🍿 Discover & Recommendations":
@@ -534,7 +599,6 @@ if main_tab_choice == "🍿 Discover & Recommendations":
                                 f'</div>', 
                                 unsafe_allow_html=True
                             )
-                            # Clicking title button opens modal directly
                             if st.button(f"{item['title']} ({item['year']})", key=f"btn_recs_{item['movie_id']}_{row_start + idx}"):
                                 show_movie_modal(item, prefix=f"recs_{row_start + idx}")
 
@@ -686,7 +750,7 @@ elif main_tab_choice == "🔍 Global Search Hub":
 
 # --- TAB 3: My Watchlist ---
 elif main_tab_choice == "❤️ My Watchlist":
-    st.subheader("❤️ Your Personal Watchlist")
+    st.subheader(f"❤️ {st.session_state.username}'s Personal Watchlist")
     if not st.session_state.watchlist:
         st.info("Your watchlist is currently empty. Open any movie details modal and click 'Add to Watchlist' ❤️!")
     else:
@@ -708,5 +772,6 @@ elif main_tab_choice == "❤️ My Watchlist":
         st.markdown("---")
         if st.button("🗑️ Clear Entire Watchlist", type="secondary"):
             st.session_state.watchlist = []
+            save_user_watchlist(st.session_state.username, st.session_state.watchlist)
             st.toast("Watchlist cleared successfully.", icon="🧹")
             st.rerun()
