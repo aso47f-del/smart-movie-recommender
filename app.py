@@ -25,7 +25,6 @@ st.markdown("""
         }
     }
 
-    /* Apply smooth fade-in to the main layout and content blocks */
     .block-container, div[data-testid="stVerticalBlock"] > div {
         animation: fadeIn 0.35s ease-in-out;
     }
@@ -62,11 +61,6 @@ st.markdown("""
         font-weight: 600;
         margin-top: 4px;
         margin-bottom: 4px;
-    }
-    /* Horizontal Layout for Main Radio Navigation */
-    div.row-widget.stRadio > div {
-        flex-direction: row;
-        gap: 20px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -442,14 +436,11 @@ if st.sidebar.button("Surprise Me! 🎲", use_container_width=True, key="surpris
         rand_movie = random.choice(trending)
         st.session_state.selected_movie_id = rand_movie.get("id")
         
-        with st.status(f'Surprise! Selecting "{rand_movie.get("title")}"...', expanded=True) as status:
-            st.write("🔄 Connecting to TMDB API...")
-            time.sleep(0.2)
+        with st.spinner(f'Surprise! Selecting "{rand_movie.get("title")}"...'):
             st.session_state.selected_movie_info = get_movie_details(rand_movie.get("id"))
             st.session_state.recommendations = get_recommendations_from_tmdb(rand_movie.get("id"), selected_genre)
-            status.update(label="Surprise movie loaded! 🎉", state="complete", expanded=False)
 
-# Main UI Title & Programmable Navigation Hub using Radio
+# Main UI Title & Navigation Hub
 st.title("🎬 Smart Live Movie & Franchise Hub")
 st.caption("Personalized movie recommendations, mood discovery, global search, and franchises!")
 
@@ -471,10 +462,8 @@ if "watchlist" not in st.session_state:
 
 # --- TAB 1: Discover & Recommendations ---
 if main_tab_choice == "🍿 Discover & Recommendations":
-    # Unified st.tabs matching Global Search Hub style
     sub_tab1, sub_tab2 = st.tabs(["🚀 Movie-based Recommendations", "🎲 Mood-based Discovery"])
     
-    # Sub-tab 1: Movie Recommendations
     with sub_tab1:
         search_query = st.text_input("Search movie to get tailored recommendations:", "Obsession", key="global_search_input")
 
@@ -499,12 +488,9 @@ if main_tab_choice == "🍿 Discover & Recommendations":
             st.session_state.recommendations = []
 
         if st.button("Get Recommendations 🚀", type="primary", key="get_recs_btn") and selected_movie_id:
-            with st.status("Fetching live movie recommendations...", expanded=True) as status:
-                st.write("🔄 Connecting to TMDB database...")
-                time.sleep(0.2)
+            with st.spinner("Fetching live movie recommendations..."):
                 st.session_state.selected_movie_info = get_movie_details(selected_movie_id)
                 st.session_state.recommendations = get_recommendations_from_tmdb(selected_movie_id, selected_genre)
-                status.update(label="Recommendations loaded successfully! 🚀", state="complete", expanded=False)
 
         if "selected_movie_info" in st.session_state and st.session_state.selected_movie_info:
             sel_movie = st.session_state.selected_movie_info
@@ -558,7 +544,6 @@ if main_tab_choice == "🍿 Discover & Recommendations":
                             if st.button("🎬 Details", key=f"btn_recs_{item['movie_id']}_{row_start + idx}"):
                                 show_movie_modal(item, prefix=f"recs_{row_start + idx}")
 
-    # Sub-tab 2: Mood Recommendations
     with sub_tab2:
         st.subheader("🎲 Mood-Based Movie Finder")
         selected_mood = st.selectbox("Select Mood:", list(MOOD_OPTIONS.keys()), key="mood_selector")
@@ -570,10 +555,22 @@ if main_tab_choice == "🍿 Discover & Recommendations":
             st.session_state.mood_page = 1
                 
         mood_data = MOOD_OPTIONS[selected_mood]
-        mood_movies, total_mood_pages = discover_movies_by_mood(mood_data["genres"], mood_data["sort"], page=st.session_state.mood_page)
+        
+        with st.spinner("Finding movies matching your mood..."):
+            mood_movies, total_mood_pages = discover_movies_by_mood(mood_data["genres"], mood_data["sort"], page=st.session_state.mood_page)
         
         if mood_movies:
-            st.markdown(f"### 🌟 Mood Pick Recommendations (Page {st.session_state.mood_page} of {total_mood_pages})")
+            col_m1, col_m2 = st.columns([2, 3])
+            with col_m1:
+                st.markdown(f"### 🌟 Mood Pick Recommendations")
+            with col_m2:
+                if total_mood_pages > 1:
+                    st.session_state.mood_page = st.selectbox(
+                        "Select Page:", 
+                        range(1, total_mood_pages + 1), 
+                        index=st.session_state.mood_page - 1,
+                        key="mood_page_selector"
+                    )
             
             COLS_PER_ROW = 5
             for row_start in range(0, len(mood_movies), COLS_PER_ROW):
@@ -608,11 +605,8 @@ elif main_tab_choice == "🔍 Global Search Hub":
         if selected_person_id:
             if st.button("Show Full Filmography 🎥", type="primary", key="person_btn") or person_query:
                 st.session_state.person_page = 1
-                with st.status("Fetching complete filmography...", expanded=True) as status:
-                    st.write("🔄 Loading filmography works...")
-                    time.sleep(0.2)
+                with st.spinner("Loading complete filmography..."):
                     st.session_state.person_movies = get_person_filmography(selected_person_id)
-                    status.update(label="Filmography loaded successfully! 🎥", state="complete", expanded=False)
                     
         if "person_movies" in st.session_state and st.session_state.person_movies:
             st.markdown("---")
@@ -624,7 +618,17 @@ elif main_tab_choice == "🔍 Global Search Hub":
             if "person_page" not in st.session_state:
                 st.session_state.person_page = 1
                 
-            st.markdown(f"### 🎬 Complete Works ({total_items} Movies) - Page {st.session_state.person_page} of {total_p_pages}")
+            col_p1, col_p2 = st.columns([2, 3])
+            with col_p1:
+                st.markdown(f"### 🎬 Complete Works ({total_items} Movies)")
+            with col_p2:
+                if total_p_pages > 1:
+                    st.session_state.person_page = st.selectbox(
+                        "Select Page:", 
+                        range(1, total_p_pages + 1), 
+                        index=st.session_state.person_page - 1,
+                        key="person_page_selector"
+                    )
             
             start_idx = (st.session_state.person_page - 1) * items_per_page
             page_movies = all_p_movies[start_idx:start_idx + items_per_page]
@@ -661,11 +665,8 @@ elif main_tab_choice == "🔍 Global Search Hub":
                     selected_coll_id = coll_options.get(chosen_coll_name)
 
         if selected_coll_id:
-            with st.status("Fetching full franchise chronologically...", expanded=True) as status:
-                st.write("🔄 Loading franchise movies...")
-                time.sleep(0.2)
+            with st.spinner("Fetching full franchise chronologically..."):
                 collection = get_collection_details(selected_coll_id)
-                status.update(label="Franchise loaded successfully! 🎬", state="complete", expanded=False)
                 
                 if collection:
                     st.markdown("---")
