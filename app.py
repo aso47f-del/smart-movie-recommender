@@ -13,7 +13,6 @@ st.set_page_config(
 # 2. CSS Styling for Smooth Transitions & Modern Clean UI
 st.markdown("""
     <style>
-    /* Smooth Fade-in Animation for Page Transitions */
     @keyframes fadeIn {
         from {
             opacity: 0;
@@ -37,30 +36,25 @@ st.markdown("""
         transform: scale(1.03);
         box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
     }
-    .movie-title {
-        font-weight: 700;
-        font-size: 0.95rem;
-        height: 2.6rem;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        margin-top: 0.4rem;
-        margin-bottom: 0.2rem;
-    }
     .movie-info {
         font-size: 0.85rem;
         font-weight: 600;
         margin-bottom: 0.4rem;
+        text-align: center;
     }
     .movie-rating { color: #ffb703; }
     .movie-match { color: #2ec4b6; }
-    .cast-name {
+    
+    /* Make movie buttons look clean and full-width for card title click */
+    div.stButton > button {
+        width: 100%;
+        border-radius: 8px;
         font-size: 0.85rem;
-        text-align: center;
-        font-weight: 600;
-        margin-top: 4px;
-        margin-bottom: 4px;
+        font-weight: 700;
+        height: 2.8rem;
+        white-space: normal;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -504,7 +498,7 @@ if main_tab_choice == "🍿 Discover & Recommendations":
                 st.markdown(f"### {sel_movie['title']} ({sel_movie['year']})")
                 st.markdown(f"⭐ **Rating:** {sel_movie['rating']}/10")
                 st.write(sel_movie['overview'])
-                if st.button("ℹ️ View Details & Cast", key="btn_selected_details"):
+                if st.button(f"🎬 View Details: {sel_movie['title']}", key="btn_selected_details"):
                     show_movie_modal(sel_movie, prefix="selected")
 
             st.markdown("---")
@@ -533,7 +527,6 @@ if main_tab_choice == "🍿 Discover & Recommendations":
                     for idx, item in enumerate(row_items):
                         with cols[idx]:
                             st.image(item['poster'], use_container_width=True)
-                            st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
                             st.markdown(
                                 f'<div class="movie-info">'
                                 f'<span class="movie-rating">⭐ {item["rating"]}/10</span> | '
@@ -541,7 +534,8 @@ if main_tab_choice == "🍿 Discover & Recommendations":
                                 f'</div>', 
                                 unsafe_allow_html=True
                             )
-                            if st.button("🎬 Details", key=f"btn_recs_{item['movie_id']}_{row_start + idx}"):
+                            # Clicking title button opens modal directly
+                            if st.button(f"{item['title']} ({item['year']})", key=f"btn_recs_{item['movie_id']}_{row_start + idx}"):
                                 show_movie_modal(item, prefix=f"recs_{row_start + idx}")
 
     with sub_tab2:
@@ -580,9 +574,8 @@ if main_tab_choice == "🍿 Discover & Recommendations":
                 for idx, item in enumerate(row_items):
                     with cols[idx]:
                         st.image(item['poster'], use_container_width=True)
-                        st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
                         st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                        if st.button("🎬 Details", key=f"btn_mood_{item['movie_id']}_{row_start + idx}"):
+                        if st.button(f"{item['title']} ({item['year']})", key=f"btn_mood_{item['movie_id']}_{row_start + idx}"):
                             show_movie_modal(item, prefix=f"mood_{row_start + idx}")
 
 # --- TAB 2: Global Search Hub ---
@@ -642,9 +635,8 @@ elif main_tab_choice == "🔍 Global Search Hub":
                     global_idx = start_idx + row_start + idx
                     with cols[idx]:
                         st.image(item['poster'], use_container_width=True)
-                        st.markdown(f'<div class="movie-title">{global_idx + 1}. {item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
                         st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                        if st.button("🎬 Details", key=f"btn_person_{item['movie_id']}_{global_idx}"):
+                        if st.button(f"{global_idx + 1}. {item['title']} ({item['year']})", key=f"btn_person_{item['movie_id']}_{global_idx}"):
                             show_movie_modal(item, prefix=f"person_{global_idx}")
 
     with search_sub_tab2:
@@ -688,9 +680,8 @@ elif main_tab_choice == "🔍 Global Search Hub":
                         for idx, item in enumerate(row_items):
                             with cols[idx]:
                                 st.image(item['poster'], use_container_width=True)
-                                st.markdown(f'<div class="movie-title">{idx + row_start + 1}. {item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
                                 st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                                if st.button("🎬 Details", key=f"btn_coll_{item['movie_id']}_{row_start + idx}"):
+                                if st.button(f"{idx + row_start + 1}. {item['title']} ({item['year']})", key=f"btn_coll_{item['movie_id']}_{row_start + idx}"):
                                     show_movie_modal(item, prefix=f"coll_{row_start + idx}")
 
 # --- TAB 3: My Watchlist ---
@@ -710,9 +701,8 @@ elif main_tab_choice == "❤️ My Watchlist":
             for idx, item in enumerate(row_items):
                 with cols[idx]:
                     st.image(item['poster'], use_container_width=True)
-                    st.markdown(f'<div class="movie-title">{item["title"]} ({item["year"]})</div>', unsafe_allow_html=True)
                     st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                    if st.button("🎬 Details", key=f"btn_watch_{item['movie_id']}_{row_start + idx}"):
+                    if st.button(f"{item['title']} ({item['year']})", key=f"btn_watch_{item['movie_id']}_{row_start + idx}"):
                         show_movie_modal(item, prefix=f"watch_{row_start + idx}")
         
         st.markdown("---")
