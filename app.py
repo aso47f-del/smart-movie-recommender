@@ -10,7 +10,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. CSS Styling for Smooth Transitions, Modern Clean UI & Advanced Mobile Responsiveness
+# 2. CSS Styling for Smooth Transitions, Modern Clean UI & Fixed Mobile Layout
 st.markdown("""
     <style>
     @keyframes fadeIn {
@@ -31,6 +31,7 @@ st.markdown("""
     div[data-testid="stImage"] img {
         border-radius: 12px;
         transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+        object-fit: cover;
     }
     div[data-testid="stImage"] img:hover {
         transform: scale(1.03);
@@ -46,7 +47,7 @@ st.markdown("""
     .movie-match { color: #2ec4b6; }
     
     div.stButton > button {
-        width: 100%;
+        width: 100% !important;
         border-radius: 8px;
         font-size: 0.85rem;
         font-weight: 700;
@@ -56,30 +57,30 @@ st.markdown("""
         text-overflow: ellipsis;
     }
 
-    /* --- Advanced Mobile Responsiveness Fixes --- */
+    /* --- Perfect Mobile Grid & Responsiveness --- */
     @media (max-width: 768px) {
         body {
             overflow-x: hidden;
         }
         .block-container {
-            padding-left: 0.8rem !important;
-            padding-right: 0.8rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
             padding-top: 1rem !important;
         }
-        /* تحويل صفوف الأعمدة لتصبح عمودين (2 items per row) على الموبايل بدلاً من 5 */
-        div[data-testid="stHorizontalBlock"] {
-            flex-wrap: wrap !important;
+        /* ضبط بوسترات الأفلام بحجم متناسق ومناسب للشاشة */
+        div[data-testid="stImage"] img {
+            max-height: 240px !important;
+            width: 100% !important;
+            object-fit: cover !important;
         }
-        div[data-testid="column"] {
-            width: 48% !important;
-            flex: 1 1 48% !important;
-            min-width: 48% !important;
-            margin-bottom: 0.8rem !important;
-        }
+        /* تحسين مظهر الأزرار والعناوين على الموبايل */
         div.stButton > button {
-            font-size: 0.75rem;
-            height: 2.5rem;
-            padding: 0.2rem;
+            font-size: 0.75rem !important;
+            height: 2.6rem !important;
+            padding: 2px 4px !important;
+        }
+        .movie-info {
+            font-size: 0.75rem !important;
         }
     }
     </style>
@@ -480,6 +481,30 @@ st.markdown("---")
 if "watchlist" not in st.session_state:
     st.session_state.watchlist = []
 
+# Helper Function to Render Movie Grid Safely Across Desktop & Mobile
+def render_movie_grid(movies_list, prefix_key):
+    COLS_PER_ROW = 5
+    for row_start in range(0, len(movies_list), COLS_PER_ROW):
+        row_items = movies_list[row_start : row_start + COLS_PER_ROW]
+        cols = st.columns(COLS_PER_ROW)
+        
+        for idx, item in enumerate(row_items):
+            with cols[idx]:
+                st.image(item['poster'], use_container_width=True)
+                
+                # Match or Rating info
+                match_str = f' | <span class="movie-match">🎯 {item["match"]}%</span>' if 'match' in item else ''
+                st.markdown(
+                    f'<div class="movie-info">'
+                    f'<span class="movie-rating">⭐ {item["rating"]}/10</span>{match_str}'
+                    f'</div>', 
+                    unsafe_allow_html=True
+                )
+                
+                # Clean full-width action button below poster
+                if st.button(f"{item['title']} ({item['year']})", key=f"{prefix_key}_{item['movie_id']}_{row_start + idx}"):
+                    show_movie_modal(item, prefix=f"{prefix_key}_{row_start + idx}")
+
 # --- TAB 1: Discover & Recommendations ---
 if main_tab_choice == "🍿 Discover & Recommendations":
     sub_tab1, sub_tab2 = st.tabs(["🚀 Movie-based Recommendations", "🎲 Mood-based Discovery"])
@@ -545,23 +570,7 @@ if main_tab_choice == "🍿 Discover & Recommendations":
             if not results:
                 st.warning(f"⚠️ No recommendations found matching genre '{selected_genre}'.")
             else:
-                COLS_PER_ROW = 5
-                for row_start in range(0, len(results), COLS_PER_ROW):
-                    row_items = results[row_start : row_start + COLS_PER_ROW]
-                    cols = st.columns(COLS_PER_ROW)
-                    
-                    for idx, item in enumerate(row_items):
-                        with cols[idx]:
-                            st.image(item['poster'], use_container_width=True)
-                            st.markdown(
-                                f'<div class="movie-info">'
-                                f'<span class="movie-rating">⭐ {item["rating"]}/10</span> | '
-                                f'<span class="movie-match">🎯 {item["match"]}%</span>'
-                                f'</div>', 
-                                unsafe_allow_html=True
-                            )
-                            if st.button(f"{item['title']} ({item['year']})", key=f"btn_recs_{item['movie_id']}_{row_start + idx}"):
-                                show_movie_modal(item, prefix=f"recs_{row_start + idx}")
+                render_movie_grid(results, "btn_recs")
 
     with sub_tab2:
         st.subheader("🎲 Mood-Based Movie Finder")
@@ -591,17 +600,7 @@ if main_tab_choice == "🍿 Discover & Recommendations":
                         key="mood_page_selector"
                     )
             
-            COLS_PER_ROW = 5
-            for row_start in range(0, len(mood_movies), COLS_PER_ROW):
-                row_items = mood_movies[row_start : row_start + COLS_PER_ROW]
-                cols = st.columns(COLS_PER_ROW)
-                
-                for idx, item in enumerate(row_items):
-                    with cols[idx]:
-                        st.image(item['poster'], use_container_width=True)
-                        st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                        if st.button(f"{item['title']} ({item['year']})", key=f"btn_mood_{item['movie_id']}_{row_start + idx}"):
-                            show_movie_modal(item, prefix=f"mood_{row_start + idx}")
+            render_movie_grid(mood_movies, "btn_mood")
 
 # --- TAB 2: Global Search Hub ---
 elif main_tab_choice == "🔍 Global Search Hub":
@@ -651,18 +650,7 @@ elif main_tab_choice == "🔍 Global Search Hub":
             start_idx = (st.session_state.person_page - 1) * items_per_page
             page_movies = all_p_movies[start_idx:start_idx + items_per_page]
             
-            COLS_PER_ROW = 5
-            for row_start in range(0, len(page_movies), COLS_PER_ROW):
-                row_items = page_movies[row_start : row_start + COLS_PER_ROW]
-                cols = st.columns(COLS_PER_ROW)
-                
-                for idx, item in enumerate(row_items):
-                    global_idx = start_idx + row_start + idx
-                    with cols[idx]:
-                        st.image(item['poster'], use_container_width=True)
-                        st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                        if st.button(f"{global_idx + 1}. {item['title']} ({item['year']})", key=f"btn_person_{item['movie_id']}_{global_idx}"):
-                            show_movie_modal(item, prefix=f"person_{global_idx}")
+            render_movie_grid(page_movies, "btn_person")
 
     with search_sub_tab2:
         st.subheader("🔍 Explore Movie Franchises & Collections")
@@ -696,18 +684,7 @@ elif main_tab_choice == "🔍 Global Search Hub":
                         st.write(collection['overview'])
 
                     st.markdown("### 🎬 Movies in Chronological Order:")
-                    parts = collection['parts']
-                    COLS_PER_ROW = 5
-                    for row_start in range(0, len(parts), COLS_PER_ROW):
-                        row_items = parts[row_start : row_start + COLS_PER_ROW]
-                        cols = st.columns(COLS_PER_ROW)
-                        
-                        for idx, item in enumerate(row_items):
-                            with cols[idx]:
-                                st.image(item['poster'], use_container_width=True)
-                                st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                                if st.button(f"{idx + row_start + 1}. {item['title']} ({item['year']})", key=f"btn_coll_{item['movie_id']}_{row_start + idx}"):
-                                    show_movie_modal(item, prefix=f"coll_{row_start + idx}")
+                    render_movie_grid(collection['parts'], "btn_coll")
 
 # --- TAB 3: My Watchlist ---
 elif main_tab_choice == "❤️ My Watchlist":
@@ -716,19 +693,7 @@ elif main_tab_choice == "❤️ My Watchlist":
         st.info("Your watchlist is currently empty. Open any movie details modal and click 'Add to Watchlist' ❤️!")
     else:
         st.markdown(f"You have **{len(st.session_state.watchlist)}** movies saved in your watchlist:")
-        
-        COLS_PER_ROW = 5
-        watchlist_items = st.session_state.watchlist
-        for row_start in range(0, len(watchlist_items), COLS_PER_ROW):
-            row_items = watchlist_items[row_start : row_start + COLS_PER_ROW]
-            cols = st.columns(COLS_PER_ROW)
-            
-            for idx, item in enumerate(row_items):
-                with cols[idx]:
-                    st.image(item['poster'], use_container_width=True)
-                    st.markdown(f'<div class="movie-info"><span class="movie-rating">⭐ {item["rating"]}/10</span></div>', unsafe_allow_html=True)
-                    if st.button(f"{item['title']} ({item['year']})", key=f"btn_watch_{item['movie_id']}_{row_start + idx}"):
-                        show_movie_modal(item, prefix=f"watch_{row_start + idx}")
+        render_movie_grid(st.session_state.watchlist, "btn_watch")
         
         st.markdown("---")
         if st.button("🗑️ Clear Entire Watchlist", type="secondary"):
