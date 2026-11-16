@@ -350,7 +350,6 @@ def discover_media_by_mood(genre_ids, sort_by, media_type="movie", page=1):
     endpoint = "discover/movie" if media_type == "movie" else "discover/tv"
     url = f"https://api.themoviedb.org/3/{endpoint}?api_key={API_KEY}&with_genres={genre_ids}&sort_by={sort_by}&page={page}&language=en-US&vote_count.gte=50&vote_average.gte=5.5"
     if media_type == "anime":
-        # Anime filter: Japanese language + Animation genre (16)
         url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16&with_original_language=ja&sort_by={sort_by}&page={page}&language=en-US&vote_count.gte=20"
     try:
         res = requests.get(url, timeout=5)
@@ -707,7 +706,7 @@ def show_media_modal(item, prefix="modal"):
         else:
             st.info("No trailer video available.")
 
-# Top navigation and account controls
+# Top navigation and account controls (Clean Search Bar & Layout)
 if "main_nav_tab" not in st.session_state:
     st.session_state.main_nav_tab = "🏠 Home"
 
@@ -721,7 +720,8 @@ menu_options = {
 if "top_menu_select" not in st.session_state:
     st.session_state.top_menu_select = next((k for k, v in menu_options.items() if v == st.session_state.main_nav_tab), "Home")
 
-nav_home, nav_watch, nav_search, nav_menu, nav_account = st.columns([1.45, 1.05, 2.45, 1.75, 1.55], vertical_alignment="center")
+# Clean expanded layout for top navigation bar
+nav_home, nav_watch, nav_menu, nav_account = st.columns([1.3, 1.1, 1.4, 1.3], vertical_alignment="center")
 with nav_home:
     if st.button("🎬 Media Hub", use_container_width=True, key="top_home"):
         st.session_state.main_nav_tab = "🏠 Home"
@@ -734,35 +734,6 @@ with nav_watch:
         st.session_state.top_menu_select = "Home"
         st.session_state.last_top_menu_choice = "Home"
         st.rerun()
-with nav_search:
-    with st.form("top_media_search_form", clear_on_submit=False):
-        kind_col, qcol, bcol = st.columns([1.35, 3.2, 0.7])
-        with kind_col:
-            top_search_type = st.selectbox("Search type", ["Movies", "TV Shows", "Anime", "People", "Franchises"], key="top_search_type", label_visibility="collapsed")
-        with qcol:
-            top_search_query = st.text_input("Search", placeholder="Movie, TV, Anime, person…", label_visibility="collapsed", key="top_search_query")
-        with bcol:
-            search_submitted = st.form_submit_button("🔎", use_container_width=True)
-        if search_submitted:
-            cleaned_query = top_search_query.strip()
-            st.session_state.top_search_results_query = cleaned_query
-            st.session_state.top_search_media_type = top_search_type
-            if top_search_type == "People":
-                st.session_state.person_search_input = cleaned_query
-                st.session_state.main_nav_tab = "🎭 Actors & Directors"
-                st.session_state.top_menu_select = "Actors & Directors"
-                st.session_state.last_top_menu_choice = "Actors & Directors"
-            elif top_search_type == "Franchises":
-                st.session_state.franchise_search_input = cleaned_query
-                st.session_state.franchise_mode_radio = "Search Any Franchise 🔍"
-                st.session_state.main_nav_tab = "🎞️ Movie Franchises"
-                st.session_state.top_menu_select = "Movie Franchises"
-                st.session_state.last_top_menu_choice = "Movie Franchises"
-            else:
-                st.session_state.main_nav_tab = "🔎 Media Search"
-                st.session_state.top_menu_select = "Home"
-                st.session_state.last_top_menu_choice = "Home"
-            st.rerun()
 with nav_menu:
     menu_choice = st.selectbox("☰ Menu", list(menu_options.keys()), key="top_menu_select", label_visibility="collapsed")
     if "last_top_menu_choice" not in st.session_state:
@@ -783,6 +754,42 @@ with nav_account:
                 st.login("google")
             except Exception:
                 st.error("Google sign-in is not configured yet.")
+
+# --- Enhanced Dedicated Search Bar Section ---
+with st.container(border=True):
+    st.markdown("##### 🔎 Universal Search & Discovery")
+    with st.form("top_media_search_form", clear_on_submit=False):
+        s_col1, s_col2, s_col3 = st.columns([1.5, 3.5, 1])
+        with s_col1:
+            top_search_type = st.selectbox("Search category", ["Movies", "TV Shows", "Anime", "People", "Franchises"], key="top_search_type", label_visibility="collapsed")
+        with s_col2:
+            top_search_query = st.text_input("Search query", placeholder="Type movie, TV series, anime, actor, franchise...", label_visibility="collapsed", key="top_search_query")
+        with s_col3:
+            search_submitted = st.form_submit_button("Search 🚀", use_container_width=True)
+            
+        if search_submitted:
+            cleaned_query = top_search_query.strip()
+            if cleaned_query:
+                st.session_state.top_search_results_query = cleaned_query
+                st.session_state.top_search_media_type = top_search_type
+                if top_search_type == "People":
+                    st.session_state.person_search_input = cleaned_query
+                    st.session_state.main_nav_tab = "🎭 Actors & Directors"
+                    st.session_state.top_menu_select = "Actors & Directors"
+                    st.session_state.last_top_menu_choice = "Actors & Directors"
+                elif top_search_type == "Franchises":
+                    st.session_state.franchise_search_input = cleaned_query
+                    st.session_state.franchise_mode_radio = "Search Any Franchise 🔍"
+                    st.session_state.main_nav_tab = "🎞️ Movie Franchises"
+                    st.session_state.top_menu_select = "Movie Franchises"
+                    st.session_state.last_top_menu_choice = "Movie Franchises"
+                else:
+                    st.session_state.main_nav_tab = "🔎 Media Search"
+                    st.session_state.top_menu_select = "Home"
+                    st.session_state.last_top_menu_choice = "Home"
+                st.rerun()
+            else:
+                st.warning("Please enter a search term first.")
 
 st.markdown("---")
 
@@ -818,21 +825,33 @@ elif "watchlist" not in st.session_state:
     st.session_state.watchlist = [normalize_watchlist_item(m) for m in load_user_watchlist(watchlist_owner)] if is_logged_in else []
     st.session_state.watchlist_owner = watchlist_owner
 
-# --- HOME ---
+# --- HOME with Filter Option (All, Movies, Series, Anime) ---
 if main_tab_choice == "🏠 Home":
     st.title("🎬 Discover Movies, TV Shows & Anime")
     st.caption("Trending picks, top-rated movies, TV series, and anime — all in one unified hub.")
-    render_home_carousel("Trending Movies", "🔥 Trending Movies This Week", "home_trend_mov")
-    render_home_carousel("Trending TV Shows", "📺 Trending TV Shows This Week", "home_trend_tv")
-    render_home_carousel("Popular Anime", "🌸 Popular Anime Masterpieces", "home_anime")
-    render_home_carousel("Action", "💥 Action & Adventure", "home_action")
-    render_home_carousel("Horror", "👻 Horror & Thriller", "home_horror")
-    render_home_carousel("Top Rated Movies", "⭐ Top Rated Movies", "home_top_mov")
-    render_home_carousel("Top Rated TV", "🌟 Top Rated TV Shows", "home_top_tv")
+    
+    # Category filter pills/selectbox for Home
+    home_filter = st.radio("Filter Home Categories:", ["All", "Movies", "TV Series", "Anime"], horizontal=True, key="home_category_filter")
+    st.markdown("")
+
+    if home_filter in ["All", "Movies"]:
+        render_home_carousel("Trending Movies", "🔥 Trending Movies This Week", "home_trend_mov")
+        render_home_carousel("Top Rated Movies", "⭐ Top Rated Movies", "home_top_mov")
+    
+    if home_filter in ["All", "TV Series"]:
+        render_home_carousel("Trending TV Shows", "📺 Trending TV Shows This Week", "home_trend_tv")
+        render_home_carousel("Top Rated TV", "🌟 Top Rated TV Shows", "home_top_tv")
+        
+    if home_filter in ["All", "Anime"]:
+        render_home_carousel("Popular Anime", "🌸 Popular Anime Masterpieces", "home_anime")
+        
+    if home_filter == "All":
+        render_home_carousel("Action", "💥 Action & Adventure", "home_action")
+        render_home_carousel("Horror", "👻 Horror & Thriller", "home_horror")
 
 # --- Global Search ---
 elif main_tab_choice == "🔎 Media Search":
-    st.title("🔎 Search Media")
+    st.title("🔎 Search Results")
     query = st.session_state.get("top_search_results_query", "")
     st_type = st.session_state.get("top_search_media_type", "Movies")
     
