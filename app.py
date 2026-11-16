@@ -16,20 +16,12 @@ st.set_page_config(
 st.markdown("""
     <style>
     @keyframes fadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(6px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
     }
-
     .block-container, div[data-testid="stVerticalBlock"] > div {
         animation: fadeIn 0.35s ease-in-out;
     }
-
     div[data-testid="stImage"] img {
         border-radius: 12px;
         transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
@@ -47,9 +39,8 @@ st.markdown("""
     .media-rating { color: #ffb703; }
     .media-match { color: #2ec4b6; }
     .stApp { background: #0b0b0f; }
-    .media-section-title { font-size: 1.45rem; font-weight: 800; margin: 1.2rem 0 .35rem; }
+    .media-section-title { font-size: 1.45rem; font-weight: 800; margin: 1.2rem 0 .35rem; border-left: 4px solid #f5c518; padding-left: .65rem; }
     .home-subtitle { color: #b8b8c4; margin-top: -.5rem; }
-    .media-section-title { border-left: 4px solid #f5c518; padding-left: .65rem; }
     div[data-testid="stHorizontalBlock"] { gap: 1rem; }
     .top-brand { font-size: 1.35rem; font-weight: 900; letter-spacing: -.4px; }
     .top-brand span { color: #f5c518; }
@@ -74,24 +65,13 @@ st.markdown("""
         overflow-wrap: anywhere !important;
         border-radius: 8px !important;
     }
-    div[data-baseweb="popover"] li[role="option"] * {
-        font-size: inherit !important;
-        line-height: inherit !important;
-    }
-    div[data-baseweb="select"] > div {
-        min-height: 44px;
-    }
-    .watchlist-card { min-height: 100%; }
-    .watchlist-card-title { min-height: 2.7rem; font-weight: 750; text-align: center; }
+    div[data-baseweb="select"] > div { min-height: 44px; }
     @media (max-width: 760px) {
         div[data-baseweb="popover"] { min-width: min(290px, 88vw) !important; }
-        div[data-baseweb="popover"] li[role="option"] { min-height: 44px !important; }
-
         .block-container { padding-left: .7rem; padding-right: .7rem; }
         .media-section-title { font-size: 1.1rem; }
         div[data-testid="stHorizontalBlock"] { gap: .35rem; }
     }
-    
     div.stButton > button {
         width: 100%;
         border-radius: 8px;
@@ -242,7 +222,7 @@ MOOD_OPTIONS = {
     "Animation & Family 🍿": {"genres": "16,10751", "sort": "vote_average.desc"}
 }
 
-# --- API Functions for Movies, TV Shows & Anime ---
+# --- API Functions ---
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_media_tmdb(query, media_type="All"):
@@ -253,9 +233,9 @@ def search_media_tmdb(query, media_type="All"):
     else:
         endpoint = "search/multi"
         
-    url = f"https://api.themoviedb.org/3/{endpoint}?api_key={API_KEY}&query={query}&language=en-US"
+    url = f"https://api.themoviedb.org/3/{endpoint}?api_key={API_KEY}&query={requests.utils.quote(query)}&language=en-US"
     try:
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=8)
         if res.status_code == 200:
             results = res.json().get("results", [])
             formatted = []
@@ -263,9 +243,14 @@ def search_media_tmdb(query, media_type="All"):
                 m_t = r.get("media_type")
                 if not m_t:
                     m_t = "movie" if endpoint == "search/movie" else "tv"
-                if m_t in ["movie", "tv"]:
-                    r["media_type"] = m_t
-                    formatted.append(r)
+                if m_t not in ["movie", "tv"]:
+                    continue
+                if media_type == "Anime":
+                    is_anime = (16 in r.get("genre_ids", [])) or (r.get("original_language") == "ja")
+                    if not is_anime:
+                        continue
+                r["media_type"] = m_t
+                formatted.append(r)
             return formatted
     except Exception as e:
         st.toast(f"⚠️ Connection error during search: {e}", icon="🚨")
@@ -273,9 +258,9 @@ def search_media_tmdb(query, media_type="All"):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_collection_tmdb(query):
-    url = f"https://api.themoviedb.org/3/search/collection?api_key={API_KEY}&query={query}&language=en-US"
+    url = f"https://api.themoviedb.org/3/search/collection?api_key={API_KEY}&query={requests.utils.quote(query)}&language=en-US"
     try:
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=8)
         if res.status_code == 200:
             return res.json().get("results", [])
     except Exception:
@@ -284,9 +269,9 @@ def search_collection_tmdb(query):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_person_tmdb(query):
-    url = f"https://api.themoviedb.org/3/search/person?api_key={API_KEY}&query={query}&language=en-US"
+    url = f"https://api.themoviedb.org/3/search/person?api_key={API_KEY}&query={requests.utils.quote(query)}&language=en-US"
     try:
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=8)
         if res.status_code == 200:
             results = res.json().get("results", [])
             return sorted(results, key=lambda x: x.get("popularity", 0), reverse=True)
@@ -302,14 +287,14 @@ def get_person_details(person_id):
         if res.status_code == 200:
             return res.json()
     except Exception:
-        st.toast("⚠️ Unable to load this person's biography right now.", icon="⚠️")
+        pass
     return {}
 
 @st.cache_data(show_spinner=False, ttl=604800)
 def get_person_filmography(person_id):
     url = f"https://api.themoviedb.org/3/person/{person_id}/combined_credits?api_key={API_KEY}&language=en-US"
     try:
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=8)
         if res.status_code == 200:
             data = res.json()
             all_media_dict = {}
@@ -317,11 +302,9 @@ def get_person_filmography(person_id):
                 m_id = m.get("id")
                 m_type = m.get("media_type", "movie")
                 unique_key = f"{m_type}_{m_id}"
-                
                 genre_ids = m.get("genre_ids", [])
                 if 10767 in genre_ids or 10763 in genre_ids or 10764 in genre_ids:
                     continue
-                    
                 if m_id and unique_key not in all_media_dict:
                     m["media_type"] = m_type if m_type in ["movie", "tv"] else "movie"
                     all_media_dict[unique_key] = m
@@ -350,24 +333,24 @@ def get_person_filmography(person_id):
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def discover_media_by_mood(genre_ids, sort_by, media_type="movie", page=1):
-    # Map movie genre IDs to TV equivalents if necessary
     if media_type in ["tv", "anime"]:
-        genre_map_tv = {"28": "10759", "12": "10759", "16": "16", "35": "35", "18": "18", "27": "27", "10749": "10749", "878": "10765", "14": "10765", "9648": "9648", "53": "9648", "10751": "10751"}
+        genre_map_tv = {
+            "28": "10759", "12": "10759", "16": "16", "35": "35", "18": "18",
+            "27": "27", "10749": "10749", "878": "10765", "14": "10765",
+            "9648": "9648", "53": "9648", "10751": "10751"
+        }
         g_list = genre_ids.split(",")
         mapped_list = [genre_map_tv.get(g.strip(), g.strip()) for g in g_list]
         genre_ids = ",".join(list(set(mapped_list)))
 
     endpoint = "discover/movie" if media_type == "movie" else "discover/tv"
-    
-    # Try multiple fallback vote thresholds to ensure results are always loaded successfully
     for vote_gte in [20, 5, 0]:
         if media_type == "anime":
             url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16,{genre_ids}&with_original_language=ja&sort_by={sort_by}&page={page}&language=en-US&vote_count.gte={vote_gte}"
         else:
             url = f"https://api.themoviedb.org/3/{endpoint}?api_key={API_KEY}&with_genres={genre_ids}&sort_by={sort_by}&page={page}&language=en-US&vote_count.gte={vote_gte}"
-            
         try:
-            res = requests.get(url, timeout=5)
+            res = requests.get(url, timeout=8)
             if res.status_code == 200:
                 data = res.json()
                 results = data.get("results", [])
@@ -393,14 +376,13 @@ def discover_media_by_mood(genre_ids, sort_by, media_type="movie", page=1):
                     return media_list, total_pages
         except Exception:
             continue
-            
     return [], 1
 
 @st.cache_data(show_spinner=False, ttl=604800)
 def get_collection_details(collection_id):
     url = f"https://api.themoviedb.org/3/collection/{collection_id}?api_key={API_KEY}&language=en-US"
     try:
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=8)
         if res.status_code == 200:
             data = res.json()
             parts_sorted = sorted(data.get("parts", []), key=lambda x: x.get("release_date", "9999") or "9999")
@@ -439,7 +421,7 @@ def fetch_media_modal_data(media_id, media_type="movie"):
     
     overview, runtime, imdb_id, youtube_key, creator_director, cast = "No overview available.", "N/A", None, None, "N/A", []
     try:
-        res_info = requests.get(info_url, timeout=5)
+        res_info = requests.get(info_url, timeout=8)
         if res_info.status_code == 200:
             data = res_info.json()
             overview = data.get("overview", "No overview available.")
@@ -451,14 +433,14 @@ def fetch_media_modal_data(media_id, media_type="movie"):
                 runtime = f"{seasons_count} Season(s) ({eps_count} Eps)"
             imdb_id = data.get("imdb_id")
             
-        res_vid = requests.get(videos_url, timeout=5)
+        res_vid = requests.get(videos_url, timeout=8)
         if res_vid.status_code == 200:
             for vid in res_vid.json().get("results", []):
                 if vid.get("site") == "YouTube" and vid.get("type") in ["Trailer", "Teaser"]:
                     youtube_key = vid.get("key")
                     break
                     
-        res_credits = requests.get(credits_url, timeout=5)
+        res_credits = requests.get(credits_url, timeout=8)
         if res_credits.status_code == 200:
             c_data = res_credits.json()
             if media_type == "movie":
@@ -470,18 +452,16 @@ def fetch_media_modal_data(media_id, media_type="movie"):
                 creators = c_data.get("created_by", [])
                 if creators:
                     creator_director = ", ".join([c.get("name") for c in creators])
-                else:
-                    creator_director = "N/A"
             cast = c_data.get("cast", [])[:4]
     except Exception:
-        st.toast("⚠️ Error loading modal content.", icon="⚠️")
+        pass
     return overview, runtime, imdb_id, youtube_key, creator_director, cast
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_media_watch_providers(media_id, media_type="movie"):
     url = f"https://api.themoviedb.org/3/{media_type}/{media_id}/watch/providers?api_key={API_KEY}"
     try:
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=8)
         if res.status_code == 200:
             data = res.json().get("results", {})
             for country in ['EG', 'GB', 'FR', 'US']:
@@ -495,7 +475,7 @@ def get_media_watch_providers(media_id, media_type="movie"):
 def get_media_details(media_id, media_type="movie"):
     url = f"https://api.themoviedb.org/3/{media_type}/{media_id}?api_key={API_KEY}&language=en-US"
     try:
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=8)
         if res.status_code == 200:
             data = res.json()
             poster_path = data.get("poster_path")
@@ -513,7 +493,7 @@ def get_media_details(media_id, media_type="movie"):
                 'media_type': media_type
             }
     except Exception:
-        st.toast("⚠️ Error fetching media info.", icon="⚠️")
+        pass
     return None
 
 @st.cache_data(show_spinner=False, ttl=86400)
@@ -527,12 +507,11 @@ def get_recommendations_from_tmdb(media_id, genre_filter="All", media_type="movi
     }
     url = f"https://api.themoviedb.org/3/{media_type}/{media_id}/recommendations?api_key={API_KEY}&language=en-US"
     try:
-        res = requests.get(url, timeout=5)
+        res = requests.get(url, timeout=8)
         if res.status_code == 200:
             results = res.json().get("results", [])
             recommendations = []
             target_genre_id = genre_mapping.get(genre_filter) if genre_filter != "All" else None
-            
             for item in results:
                 if target_genre_id and target_genre_id not in item.get("genre_ids", []):
                     continue
@@ -552,11 +531,10 @@ def get_recommendations_from_tmdb(media_id, genre_filter="All", media_type="movi
                 })
             return recommendations
     except Exception:
-        st.toast("⚠️ Error fetching recommendations.", icon="⚠️")
+        pass
     return []
 
-# --- Home page helpers ---
-def format_tmdb_media(items, media_type="movie"):
+def format_tmdb_media(items, default_media_type="movie"):
     formatted = []
     for item in items or []:
         poster_path = item.get("poster_path")
@@ -571,61 +549,33 @@ def format_tmdb_media(items, media_type="movie"):
             "year": date_str[:4] if date_str != "N/A" else "N/A",
             "match": min(99, int(item.get("popularity", 50)) % 15 + 80),
             "overview": item.get("overview", ""),
-            "media_type": media_type
+            "media_type": item.get("media_type", default_media_type)
         })
     return formatted
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def get_home_media(section, page=1):
-    if section == "Trending Movies":
-        url = f"https://api.themoviedb.org/3/trending/movie/week?api_key={API_KEY}&language=en-US&page={page}"
-        m_type = "movie"
-    elif section == "Trending TV Shows":
-        url = f"https://api.themoviedb.org/3/trending/tv/week?api_key={API_KEY}&language=en-US&page={page}"
-        m_type = "tv"
-    elif section == "Popular Anime":
-        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16&with_original_language=ja&sort_by=popularity.desc&page={page}&language=en-US"
-        m_type = "tv"
-    elif section == "Top Rated Anime":
-        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16&with_original_language=ja&sort_by=vote_average.desc&vote_count.gte=50&page={page}&language=en-US"
-        m_type = "tv"
-    elif section == "Action Anime":
-        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16,10759&with_original_language=ja&sort_by=popularity.desc&page={page}&language=en-US"
-        m_type = "tv"
-    elif section == "Fantasy Anime":
-        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16,10765&with_original_language=ja&sort_by=popularity.desc&page={page}&language=en-US"
-        m_type = "tv"
-    elif section == "Top Rated Movies":
-        url = f"https://api.themoviedb.org/3/movie/top_rated?api_key={API_KEY}&language=en-US&page={page}"
-        m_type = "movie"
-    elif section == "Top Rated TV":
-        url = f"https://api.themoviedb.org/3/tv/top_rated?api_key={API_KEY}&language=en-US&page={page}"
-        m_type = "tv"
-    elif section == "Action Movies":
-        url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres=28&sort_by=popularity.desc&page={page}&language=en-US"
-        m_type = "movie"
-    elif section == "Horror Movies":
-        url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres=27&sort_by=popularity.desc&page={page}&language=en-US"
-        m_type = "movie"
-    elif section == "Comedy Movies":
-        url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres=35&sort_by=popularity.desc&page={page}&language=en-US"
-        m_type = "movie"
-    elif section == "Action TV":
-        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=10759&sort_by=popularity.desc&page={page}&language=en-US"
-        m_type = "tv"
-    elif section == "Drama TV":
-        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=18&sort_by=popularity.desc&page={page}&language=en-US"
-        m_type = "tv"
-    elif section == "Comedy TV":
-        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=35&sort_by=popularity.desc&page={page}&language=en-US"
-        m_type = "tv"
-    else:
-        url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&sort_by=popularity.desc&language=en-US&page={page}"
-        m_type = "movie"
+    endpoints = {
+        "Trending Movies": (f"https://api.themoviedb.org/3/trending/movie/week?api_key={API_KEY}&language=en-US&page={page}", "movie"),
+        "Trending TV Shows": (f"https://api.themoviedb.org/3/trending/tv/week?api_key={API_KEY}&language=en-US&page={page}", "tv"),
+        "Popular Anime": (f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16&with_original_language=ja&sort_by=popularity.desc&page={page}&language=en-US", "tv"),
+        "Top Rated Anime": (f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16&with_original_language=ja&sort_by=vote_average.desc&vote_count.gte=50&page={page}&language=en-US", "tv"),
+        "Action Anime": (f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16,10759&with_original_language=ja&sort_by=popularity.desc&page={page}&language=en-US", "tv"),
+        "Fantasy Anime": (f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16,10765&with_original_language=ja&sort_by=popularity.desc&page={page}&language=en-US", "tv"),
+        "Top Rated Movies": (f"https://api.themoviedb.org/3/movie/top_rated?api_key={API_KEY}&language=en-US&page={page}", "movie"),
+        "Top Rated TV": (f"https://api.themoviedb.org/3/tv/top_rated?api_key={API_KEY}&language=en-US&page={page}", "tv"),
+        "Action Movies": (f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres=28&sort_by=popularity.desc&page={page}&language=en-US", "movie"),
+        "Horror Movies": (f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres=27&sort_by=popularity.desc&page={page}&language=en-US", "movie"),
+        "Comedy Movies": (f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres=35&sort_by=popularity.desc&page={page}&language=en-US", "movie"),
+        "Action TV": (f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=10759&sort_by=popularity.desc&page={page}&language=en-US", "tv"),
+        "Drama TV": (f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=18&sort_by=popularity.desc&page={page}&language=en-US", "tv"),
+        "Comedy TV": (f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=35&sort_by=popularity.desc&page={page}&language=en-US", "tv"),
+    }
+    url, m_type = endpoints.get(section, (f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&sort_by=popularity.desc&language=en-US&page={page}", "movie"))
     try:
         response = requests.get(url, timeout=8)
         if response.status_code == 200:
-            return format_tmdb_media(response.json().get("results", []), media_type=m_type)
+            return format_tmdb_media(response.json().get("results", []), default_media_type=m_type)
     except Exception:
         pass
     return []
@@ -722,7 +672,6 @@ def show_media_modal(item, prefix="modal"):
                     profile_path = actor.get("profile_path")
                     img_url = f"https://image.tmdb.org/t/p/w185{profile_path}" if profile_path else NO_IMAGE_URL
                     st.image(img_url, use_container_width=True)
-                    
                     if st.button(f"👤 {actor.get('name')}", key=f"{prefix}_actor_{actor.get('id')}_{i}"):
                         st.session_state.main_nav_tab = "🎭 Actors & Directors"
                         st.session_state.person_search_input = actor.get('name')
@@ -746,84 +695,95 @@ def show_media_modal(item, prefix="modal"):
         else:
             st.info("No trailer video available.")
 
-# Top navigation and account controls
+# ==========================================
+# NAVIGATION & SEARCH BAR (CONFLICT-FREE)
+# ==========================================
 if "main_nav_tab" not in st.session_state:
     st.session_state.main_nav_tab = "🏠 Home"
 
 menu_options = {
     "Home": "🏠 Home",
+    "Search Results": "🔎 Media Search",
     "Recommendations": "🍿 Discover & Recommendations",
     "Mood Finder": "🎲 Mood Finder",
     "Movie Franchises": "🎞️ Movie Franchises",
     "Actors & Directors": "🎭 Actors & Directors",
+    "My Watchlist": "❤️ My Watchlist",
 }
 
-# Sync top_menu_select cleanly BEFORE rendering the selectbox widget to prevent instantiation errors
-current_menu_key = next((k for k, v in menu_options.items() if v == st.session_state.main_nav_tab), "Home")
-st.session_state.top_menu_select = current_menu_key
+reverse_menu_options = {v: k for k, v in menu_options.items()}
+menu_keys = list(menu_options.keys())
+current_label = reverse_menu_options.get(st.session_state.main_nav_tab, "Home")
+current_index = menu_keys.index(current_label) if current_label in menu_keys else 0
 
 nav_home, nav_watch, nav_menu, nav_account = st.columns([1.3, 1.1, 1.4, 1.3], vertical_alignment="center")
 with nav_home:
-    if st.button("🎬 Media Hub", use_container_width=True, key="top_home"):
+    if st.button("🎬 Media Hub", use_container_width=True, key="nav_btn_home"):
         st.session_state.main_nav_tab = "🏠 Home"
         st.rerun()
 with nav_watch:
-    if st.button("♡ Watchlist", use_container_width=True, key="top_watchlist"):
+    if st.button("♡ Watchlist", use_container_width=True, key="nav_btn_watch"):
         st.session_state.main_nav_tab = "❤️ My Watchlist"
         st.rerun()
 with nav_menu:
-    menu_choice = st.selectbox("☰ Menu", list(menu_options.keys()), key="top_menu_select", label_visibility="collapsed")
-    mapped_choice = menu_options[menu_choice]
-    if mapped_choice != st.session_state.main_nav_tab:
-        st.session_state.main_nav_tab = mapped_choice
+    selected_menu_label = st.selectbox(
+        "☰ Menu",
+        menu_keys,
+        index=current_index,
+        label_visibility="collapsed"
+    )
+    if menu_options[selected_menu_label] != st.session_state.main_nav_tab:
+        st.session_state.main_nav_tab = menu_options[selected_menu_label]
         st.rerun()
 with nav_account:
     if is_logged_in:
         st.caption(f"👤 {user_name}")
-        if st.button("Sign out", key="top_signout", use_container_width=True):
+        if st.button("Sign out", key="nav_btn_signout", use_container_width=True):
             st.logout()
     else:
-        if st.button("Sign in", key="top_signin", use_container_width=True):
+        if st.button("Sign in", key="nav_btn_signin", use_container_width=True):
             try:
                 st.login("google")
             except Exception:
                 st.error("Google sign-in is not configured yet.")
 
-# --- Enhanced Dedicated Search Bar Section ---
+# Dedicated Search Bar (Clean State Isolation)
 with st.container(border=True):
     st.markdown("##### 🔎 Universal Search & Discovery")
-    with st.form("top_media_search_form", clear_on_submit=False):
+    with st.form("universal_search_form", clear_on_submit=False):
         s_col1, s_col2, s_col3 = st.columns([1.5, 3.5, 1])
         with s_col1:
-            top_search_type = st.selectbox("Search category", ["All", "Movies", "TV Shows", "Anime", "People", "Franchises"], key="top_search_type_widget", label_visibility="collapsed")
+            search_cat = st.selectbox("Category", ["All", "Movies", "TV Shows", "Anime", "People", "Franchises"], label_visibility="collapsed")
         with s_col2:
-            top_search_query = st.text_input("Search query", placeholder="Type title, actor, franchise...", label_visibility="collapsed", key="top_search_query_widget")
+            search_txt = st.text_input("Query", placeholder="Type title, actor, franchise...", label_visibility="collapsed")
         with s_col3:
-            search_submitted = st.form_submit_button("Search 🚀", use_container_width=True)
-            
-        if search_submitted:
-            cleaned_query = top_search_query.strip()
-            if cleaned_query:
-                st.session_state.top_search_results_query = cleaned_query
-                st.session_state.top_search_media_type = top_search_type
-                if top_search_type == "People":
-                    st.session_state.person_search_input = cleaned_query
-                    st.session_state.main_nav_tab = "🎭 Actors & Directors"
-                elif top_search_type == "Franchises":
-                    st.session_state.franchise_search_input = cleaned_query
-                    st.session_state.franchise_mode_radio = "Search Any Franchise 🔍"
-                    st.session_state.main_nav_tab = "🎞️ Movie Franchises"
-                else:
-                    st.session_state.main_nav_tab = "🔎 Media Search"
-                st.rerun()
+            submitted = st.form_submit_button("Search 🚀", use_container_width=True)
+
+    if submitted:
+        q_clean = search_txt.strip()
+        if q_clean:
+            st.session_state.active_search_query = q_clean
+            st.session_state.active_search_category = search_cat
+            if search_cat == "People":
+                st.session_state.person_search_input = q_clean
+                st.session_state.main_nav_tab = "🎭 Actors & Directors"
+            elif search_cat == "Franchises":
+                st.session_state.franchise_search_input = q_clean
+                st.session_state.franchise_mode_radio = "Search Any Franchise 🔍"
+                st.session_state.main_nav_tab = "🎞️ Movie Franchises"
             else:
-                st.warning("Please enter a search term first.")
+                st.session_state.main_nav_tab = "🔎 Media Search"
+            st.rerun()
+        else:
+            st.warning("Please enter a search term first.")
 
 st.markdown("---")
 
+# Sidebar Controls
 num_recommendations = 6
 sort_option = "Popularity / Match"
 selected_genre = "All"
+
 if st.session_state.main_nav_tab == "🍿 Discover & Recommendations":
     st.sidebar.header("⚙️ Recommendation Controls")
     num_recommendations = st.sidebar.slider("Number of Items:", min_value=3, max_value=20, value=6, key="num_movies_slider")
@@ -853,7 +813,11 @@ elif "watchlist" not in st.session_state:
     st.session_state.watchlist = [normalize_watchlist_item(m) for m in load_user_watchlist(watchlist_owner)] if is_logged_in else []
     st.session_state.watchlist_owner = watchlist_owner
 
-# --- HOME with Correct Specific Categories & Filters ---
+# ==========================================
+# PAGE VIEWS
+# ==========================================
+
+# --- HOME ---
 if main_tab_choice == "🏠 Home":
     st.title("🎬 Discover Movies, TV Shows & Anime")
     st.caption("Trending picks, top-rated movies, TV series, and anime — all in one unified hub.")
@@ -886,37 +850,36 @@ if main_tab_choice == "🏠 Home":
         render_home_carousel("Action Anime", "⚔️ Action & Shonen Anime", "home_act_anime")
         render_home_carousel("Fantasy Anime", "✨ Fantasy & Sci-Fi Anime", "home_fan_anime")
 
-# --- Global Search ---
+# --- GLOBAL SEARCH RESULTS ---
 elif main_tab_choice == "🔎 Media Search":
     st.title("🔎 Search Results")
-    query = st.session_state.get("top_search_results_query", "")
-    st_type = st.session_state.get("top_search_media_type", "All")
+    query = st.session_state.get("active_search_query", "")
+    st_type = st.session_state.get("active_search_category", "All")
     
     if not query:
-        st.info("Enter a title in the search bar above.")
+        st.info("Type a movie, TV show, or anime title in the search bar above and click Search.")
     else:
-        st.subheader(f"Results for ({st_type}): {query}")
-        search_results = search_media_tmdb(query, media_type=st_type)
-        formatted_results = format_tmdb_media(search_results, media_type="movie")
-        for i, res in enumerate(search_results):
-            if i < len(formatted_results):
-                formatted_results[i]["media_type"] = res.get("media_type", "movie")
-                
-        formatted_results = list({m["movie_id"]: m for m in formatted_results if m.get("movie_id")}.values())
-        if not formatted_results:
-            st.warning("No results found. Check your query and try again.")
+        st.subheader(f"Results for ({st_type}): \"{query}\"")
+        with st.spinner("Searching database..."):
+            raw_results = search_media_tmdb(query, media_type=st_type)
+            formatted_results = format_tmdb_media(raw_results, default_media_type="movie")
+            # Deduplicate by (media_type, movie_id)
+            unique_results = list({(m["media_type"], m["movie_id"]): m for m in formatted_results if m.get("movie_id")}.values())
+
+        if not unique_results:
+            st.warning(f"No results found for \"{query}\" under category **{st_type}**. Try switching the category to **All**.")
         else:
-            for row_start in range(0, len(formatted_results), 5):
-                row_items = formatted_results[row_start:row_start + 5]
-                cols = st.columns(len(row_items))
+            for row_start in range(0, len(unique_results), 5):
+                row_items = unique_results[row_start:row_start + 5]
+                cols = st.columns(5)
                 for idx, item in enumerate(row_items):
                     with cols[idx]:
                         st.image(item["poster"], use_container_width=True)
                         st.markdown(f'<div class="media-info"><span class="media-rating">⭐ {item["rating"]}/10</span> · [{item.get("media_type","movie").upper()}]</div>', unsafe_allow_html=True)
-                        if st.button(item["title"], key=f"top_search_{item['movie_id']}_{row_start + idx}", use_container_width=True):
-                            show_media_modal(item, prefix=f"top_search_{row_start + idx}")
+                        if st.button(f"{item['title']} ({item['year']})", key=f"srch_res_{item['media_type']}_{item['movie_id']}_{row_start + idx}", use_container_width=True):
+                            show_media_modal(item, prefix=f"srch_res_{row_start + idx}")
 
-# --- Recommendations ---
+# --- RECOMMENDATIONS ---
 elif main_tab_choice == "🍿 Discover & Recommendations":
     st.title("🎯 Recommendations & Discover")
     st.caption("Get similar films and TV shows from a title you love, or use your watchlist.")
@@ -978,7 +941,6 @@ elif main_tab_choice == "🍿 Discover & Recommendations":
         sel_media = st.session_state.selected_movie_info
         st.markdown("---")
         st.subheader("🎯 Selected Title")
-
         col_img, col_info = st.columns([1, 4])
         with col_img:
             st.image(sel_media['poster'], width=180)
@@ -988,7 +950,6 @@ elif main_tab_choice == "🍿 Discover & Recommendations":
             st.write(sel_media['overview'])
             if st.button(f"🎬 View Details", key="btn_selected_details"):
                 show_media_modal(sel_media, prefix="selected")
-
         st.markdown("---")
         st.subheader("🍿 Recommended Media")
 
@@ -1002,10 +963,9 @@ elif main_tab_choice == "🍿 Discover & Recommendations":
             results = sorted(results, key=lambda x: x['year'], reverse=True)
 
         results = results[:num_recommendations]
-        COLS_PER_ROW = 5
-        for row_start in range(0, len(results), COLS_PER_ROW):
-            row_items = results[row_start : row_start + COLS_PER_ROW]
-            cols = st.columns(COLS_PER_ROW)
+        for row_start in range(0, len(results), 5):
+            row_items = results[row_start : row_start + 5]
+            cols = st.columns(5)
             for idx, item in enumerate(row_items):
                 with cols[idx]:
                     st.image(item['poster'], use_container_width=True)
@@ -1013,7 +973,7 @@ elif main_tab_choice == "🍿 Discover & Recommendations":
                     if st.button(f"{item['title']} ({item['year']})", key=f"btn_recs_{item['movie_id']}_{row_start + idx}"):
                         show_media_modal(item, prefix=f"recs_{row_start + idx}")
 
-# --- Mood Finder ---
+# --- MOOD FINDER ---
 elif main_tab_choice == "🎲 Mood Finder":
     st.title("🎲 Mood Finder (Movies, TV & Anime)")
     st.caption("Choose what kind of experience you want tonight.")
@@ -1049,10 +1009,9 @@ elif main_tab_choice == "🎲 Mood Finder":
             if total_mood_pages > 1:
                 st.session_state.mood_page = st.selectbox("Select Page:", range(1, total_mood_pages + 1), index=st.session_state.mood_page - 1, key="mood_page_selector")
 
-        COLS_PER_ROW = 5
-        for row_start in range(0, len(mood_media), COLS_PER_ROW):
-            row_items = mood_media[row_start : row_start + COLS_PER_ROW]
-            cols = st.columns(COLS_PER_ROW)
+        for row_start in range(0, len(mood_media), 5):
+            row_items = mood_media[row_start : row_start + 5]
+            cols = st.columns(5)
             for idx, item in enumerate(row_items):
                 with cols[idx]:
                     st.image(item['poster'], use_container_width=True)
@@ -1060,7 +1019,7 @@ elif main_tab_choice == "🎲 Mood Finder":
                     if st.button(f"{item['title']} ({item['year']})", key=f"btn_mood_{item['movie_id']}_{row_start + idx}"):
                         show_media_modal(item, prefix=f"mood_{row_start + idx}")
 
-# --- Actors & Directors ---
+# --- ACTORS & DIRECTORS ---
 elif main_tab_choice == "🎭 Actors & Directors":
     st.title("🎭 Actors, Directors & Creators")
     st.caption("Search performers and creators, and filter out talk shows or interviews.")
@@ -1109,7 +1068,6 @@ elif main_tab_choice == "🎭 Actors & Directors":
 
     if (selected_person_id and st.session_state.get("loaded_person_id") == selected_person_id and st.session_state.get("person_movies")):
         st.markdown("---")
-        
         filmography_filter = st.radio("Filter Works:", ["All Works", "Movies Only", "TV Series Only"], horizontal=True, key="filmography_type_filter")
         
         all_p_movies = st.session_state.person_movies
@@ -1135,10 +1093,9 @@ elif main_tab_choice == "🎭 Actors & Directors":
         if not page_movies:
             st.info("No items match this filter.")
         else:
-            COLS_PER_ROW = 5
-            for row_start in range(0, len(page_movies), COLS_PER_ROW):
-                row_items = page_movies[row_start : row_start + COLS_PER_ROW]
-                cols = st.columns(COLS_PER_ROW)
+            for row_start in range(0, len(page_movies), 5):
+                row_items = page_movies[row_start : row_start + 5]
+                cols = st.columns(5)
                 for idx, item in enumerate(row_items):
                     global_idx = start_idx + row_start + idx
                     with cols[idx]:
@@ -1147,7 +1104,7 @@ elif main_tab_choice == "🎭 Actors & Directors":
                         if st.button(f"{global_idx + 1}. {item['title']} ({item['year']})", key=f"btn_person_{item['movie_id']}_{global_idx}"):
                             show_media_modal(item, prefix=f"person_{global_idx}")
 
-# --- Movie Franchises ---
+# --- MOVIE FRANCHISES ---
 elif main_tab_choice == "🎞️ Movie Franchises":
     st.title("🎞️ Movie Franchises & Collections")
     st.caption("Browse popular movie collections and cinematic universes.")
@@ -1183,10 +1140,9 @@ elif main_tab_choice == "🎞️ Movie Franchises":
 
                 st.markdown("### 🎬 Movies in Chronological Order:")
                 parts = collection['parts']
-                COLS_PER_ROW = 5
-                for row_start in range(0, len(parts), COLS_PER_ROW):
-                    row_items = parts[row_start : row_start + COLS_PER_ROW]
-                    cols = st.columns(COLS_PER_ROW)
+                for row_start in range(0, len(parts), 5):
+                    row_items = parts[row_start : row_start + 5]
+                    cols = st.columns(5)
                     for idx, item in enumerate(row_items):
                         with cols[idx]:
                             st.image(item['poster'], use_container_width=True)
@@ -1194,7 +1150,7 @@ elif main_tab_choice == "🎞️ Movie Franchises":
                             if st.button(f"{idx + row_start + 1}. {item['title']} ({item['year']})", key=f"btn_coll_{item['movie_id']}_{row_start + idx}"):
                                 show_media_modal(item, prefix=f"coll_{row_start + idx}")
 
-# --- My Watchlist ---
+# --- MY WATCHLIST ---
 elif main_tab_choice == "❤️ My Watchlist":
     st.title(f"❤️ {user_name}'s Watchlist")
     st.caption("Track movies, TV shows, and anime you want to watch or have watched.")
@@ -1212,10 +1168,9 @@ elif main_tab_choice == "❤️ My Watchlist":
             watchlist_items = [m for m in watchlist_items if m.get("status") == status_filter]
         st.markdown(f"**{len(watchlist_items)}** items in view · **{len(st.session_state.watchlist)}** total saved")
         
-        COLS_PER_ROW = 5
-        for row_start in range(0, len(watchlist_items), COLS_PER_ROW):
-            row_items = watchlist_items[row_start : row_start + COLS_PER_ROW]
-            cols = st.columns(COLS_PER_ROW, gap="medium")
+        for row_start in range(0, len(watchlist_items), 5):
+            row_items = watchlist_items[row_start : row_start + 5]
+            cols = st.columns(5, gap="medium")
             for idx, item in enumerate(row_items):
                 with cols[idx]:
                     with st.container(border=True):
