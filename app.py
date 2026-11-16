@@ -246,15 +246,29 @@ MOOD_OPTIONS = {
 
 @st.cache_data(show_spinner=False, ttl=86400)
 def search_media_tmdb(query, media_type="movie"):
-    endpoint = "search/movie" if media_type == "movie" else "search/tv"
+    if media_type == "Anime":
+        endpoint = "search/tv"
+    elif media_type == "TV Shows":
+        endpoint = "search/tv"
+    elif media_type == "Movies":
+        endpoint = "search/movie"
+    else:
+        endpoint = "search/multi"
+        
     url = f"https://api.themoviedb.org/3/{endpoint}?api_key={API_KEY}&query={query}&language=en-US"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             results = res.json().get("results", [])
+            formatted = []
             for r in results:
-                r["media_type"] = media_type
-            return results
+                m_t = r.get("media_type")
+                if not m_t:
+                    m_t = "movie" if endpoint == "search/movie" else "tv"
+                if m_t in ["movie", "tv"]:
+                    r["media_type"] = m_t
+                    formatted.append(r)
+            return formatted
     except Exception as e:
         st.toast(f"⚠️ Connection error during search: {e}", icon="🚨")
     return []
@@ -305,6 +319,13 @@ def get_person_filmography(person_id):
                 m_id = m.get("id")
                 m_type = m.get("media_type", "movie")
                 unique_key = f"{m_type}_{m_id}"
+                
+                # Filter out talk shows, news, and reality TV genres or TV show types if desired
+                # TMDB genre ID 10767 is Talk, 10763 is News, 10764 is Reality
+                genre_ids = m.get("genre_ids", [])
+                if 10767 in genre_ids or 10763 in genre_ids or 10764 in genre_ids:
+                    continue
+                    
                 if m_id and unique_key not in all_media_dict:
                     m["media_type"] = m_type if m_type in ["movie", "tv"] else "movie"
                     all_media_dict[unique_key] = m
@@ -323,7 +344,8 @@ def get_person_filmography(person_id):
                     'poster': poster_url,
                     'rating': round(raw_rating, 1) if raw_rating else 0.0,
                     'year': date_str[:4],
-                    'media_type': item.get("media_type", "movie")
+                    'media_type': item.get("media_type", "movie"),
+                    'popularity': item.get("popularity", 0)
                 })
             return formatted_media
     except Exception:
@@ -333,9 +355,9 @@ def get_person_filmography(person_id):
 @st.cache_data(show_spinner=False, ttl=86400)
 def discover_media_by_mood(genre_ids, sort_by, media_type="movie", page=1):
     endpoint = "discover/movie" if media_type == "movie" else "discover/tv"
-    url = f"https://api.themoviedb.org/3/{endpoint}?api_key={API_KEY}&with_genres={genre_ids}&sort_by={sort_by}&page={page}&language=en-US&vote_count.gte=50&vote_average.gte=5.5"
+    url = f"https://api.themoviedb.org/3/{endpoint}?api_key={API_KEY}&with_genres={genre_ids}&sort_by={sort_by}&page={page}&language=en-US&vote_count.gte=30&vote_average.gte=5.0"
     if media_type == "anime":
-        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16&with_original_language=ja&sort_by={sort_by}&page={page}&language=en-US&vote_count.gte=20"
+        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16,{genre_ids}&with_original_language=ja&sort_by={sort_by}&page={page}&language=en-US&vote_count.gte=10"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
@@ -770,9 +792,9 @@ with st.container(border=True):
     with st.form("top_media_search_form", clear_on_submit=False):
         s_col1, s_col2, s_col3 = st.columns([1.5, 3.5, 1])
         with s_col1:
-            top_search_type = st.selectbox("Search category", ["Movies", "TV Shows", "Anime", "People", "Franchises"], key="top_search_type", label_visibility="collapsed")
+            top_search_type = st.selectbox("Search category", ["All", "Movies", "TV Shows", "Anime", "People", "Franchises"], key="top_search_type_widget", label_visibility="collapsed")
         with s_col2:
-            top_search_query = st.text_input("Search query", placeholder="Type movie, TV series, anime, actor, franchise...", label_visibility="collapsed", key="top_search_query")
+            top_search_query = st.text_input("Search query", placeholder="Type title, actor, franchise...", label_visibility="collapsed", key="top_search_query_widget")
         with s_col3:
             search_submitted = st.form_submit_button("Search 🚀", use_container_width=True)
             
@@ -871,15 +893,25 @@ if main_tab_choice == "🏠 Home":
 elif main_tab_choice == "🔎 Media Search":
     st.title("🔎 Search Results")
     query = st.session_state.get("top_search_results_query", "")
-    st_type = st.session_state.get("top_search_media_type", "Movies")
+    st_type = st.session_state.get("top_search_media_type", "All")
     
     if not query:
         st.info("Enter a title in the search bar above.")
     else:
         st.subheader(f"Results for ({st_type}): {query}")
-        api_media_type = "movie" if st_type == "Movies" else "tv"
-        search_results = search_media_tmdb(query, media_type=api_media_type)
-        formatted_results = format_tmdb_media(search_results, media_type=api_media_type)
+        if st_type == "Movies":
+            search_results = search_media_tmdb(query, media_type="Movies")
+        elif st_type in ["TV Shows", "Anime"]:
+            search_results = search_media_tmdb(query, media_type="TV Shows")
+        else:
+            search_results = search_media_tmdb(query, media_type="All")
+            
+        formatted_results = format_tmdb_media(search_results, media_type="movie")
+        # Ensure proper media types are kept
+        for i, res in enumerate(search_results):
+            if i < len(formatted_results):
+                formatted_results[i]["media_type"] = res.get("media_type", "movie")
+                
         formatted_results = list({m["movie_id"]: m for m in formatted_results if m.get("movie_id")}.values())
         if not formatted_results:
             st.warning("No results found. Check your query and try again.")
@@ -890,7 +922,7 @@ elif main_tab_choice == "🔎 Media Search":
                 for idx, item in enumerate(row_items):
                     with cols[idx]:
                         st.image(item["poster"], use_container_width=True)
-                        st.markdown(f'<div class="media-info"><span class="media-rating">⭐ {item["rating"]}/10</span> · {item["year"]}</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="media-info"><span class="media-rating">⭐ {item["rating"]}/10</span> · [{item.get("media_type","movie").upper()}]</div>', unsafe_allow_html=True)
                         if st.button(item["title"], key=f"top_search_{item['movie_id']}_{row_start + idx}", use_container_width=True):
                             show_media_modal(item, prefix=f"top_search_{row_start + idx}")
 
@@ -910,7 +942,7 @@ elif main_tab_choice == "🍿 Discover & Recommendations":
 
     selected_media_id = None
     if rec_mode == "From a Movie or TV Show" and search_query:
-        search_results = search_media_tmdb(search_query, media_type=media_sel_type)
+        search_results = search_media_tmdb(search_query, media_type="Movies" if media_sel_type=="movie" else "TV Shows")
         if search_results:
             media_options = []
             media_dict_map = {}
@@ -1041,7 +1073,7 @@ elif main_tab_choice == "🎲 Mood Finder":
 # --- Actors & Directors ---
 elif main_tab_choice == "🎭 Actors & Directors":
     st.title("🎭 Actors, Directors & Creators")
-    st.caption("Search performers and creators, and explore their combined filmography.")
+    st.caption("Search performers and creators, and filter out talk shows or interviews.")
     person_query = st.text_input("Search for actor, director or creator:", key="person_search_input")
 
     if st.session_state.get("last_person_query") != person_query:
@@ -1087,32 +1119,44 @@ elif main_tab_choice == "🎭 Actors & Directors":
 
     if (selected_person_id and st.session_state.get("loaded_person_id") == selected_person_id and st.session_state.get("person_movies")):
         st.markdown("---")
+        
+        # Filter bar for filmography types (Movies, TV Series, All)
+        filmography_filter = st.radio("Filter Works:", ["All Works", "Movies Only", "TV Series Only"], horizontal=True, key="filmography_type_filter")
+        
         all_p_movies = st.session_state.person_movies
+        if filmography_filter == "Movies Only":
+            all_p_movies = [m for m in all_p_movies if m.get("media_type") == "movie"]
+        elif filmography_filter == "TV Series Only":
+            all_p_movies = [m for m in all_p_movies if m.get("media_type") == "tv"]
+            
         total_items = len(all_p_movies)
         items_per_page = 15
-        total_p_pages = (total_items + items_per_page - 1) // items_per_page
+        total_p_pages = max(1, (total_items + items_per_page - 1) // items_per_page)
 
         col_p1, col_p2 = st.columns([2, 3])
         with col_p1:
-            st.markdown(f"### 🎬 Complete Works ({total_items} Items)")
+            st.markdown(f"### 🎬 Filtered Works ({total_items} Items)")
         with col_p2:
             if total_p_pages > 1:
-                st.session_state.person_page = st.selectbox("Select Page:", range(1, total_p_pages + 1), index=st.session_state.person_page - 1, key="person_page_selector")
+                st.session_state.person_page = st.selectbox("Select Page:", range(1, total_p_pages + 1), index=min(st.session_state.person_page - 1, total_p_pages - 1), key="person_page_selector")
 
         start_idx = (st.session_state.person_page - 1) * items_per_page
         page_movies = all_p_movies[start_idx:start_idx + items_per_page]
 
-        COLS_PER_ROW = 5
-        for row_start in range(0, len(page_movies), COLS_PER_ROW):
-            row_items = page_movies[row_start : row_start + COLS_PER_ROW]
-            cols = st.columns(COLS_PER_ROW)
-            for idx, item in enumerate(row_items):
-                global_idx = start_idx + row_start + idx
-                with cols[idx]:
-                    st.image(item['poster'], use_container_width=True)
-                    st.markdown(f'<div class="media-info"><span class="media-rating">⭐ {item["rating"]}/10</span> [{item["media_type"].upper()}]</div>', unsafe_allow_html=True)
-                    if st.button(f"{global_idx + 1}. {item['title']} ({item['year']})", key=f"btn_person_{item['movie_id']}_{global_idx}"):
-                        show_media_modal(item, prefix=f"person_{global_idx}")
+        if not page_movies:
+            st.info("No items match this filter.")
+        else:
+            COLS_PER_ROW = 5
+            for row_start in range(0, len(page_movies), COLS_PER_ROW):
+                row_items = page_movies[row_start : row_start + COLS_PER_ROW]
+                cols = st.columns(COLS_PER_ROW)
+                for idx, item in enumerate(row_items):
+                    global_idx = start_idx + row_start + idx
+                    with cols[idx]:
+                        st.image(item['poster'], use_container_width=True)
+                        st.markdown(f'<div class="media-info"><span class="media-rating">⭐ {item["rating"]}/10</span> [{item["media_type"].upper()}]</div>', unsafe_allow_html=True)
+                        if st.button(f"{global_idx + 1}. {item['title']} ({item['year']})", key=f"btn_person_{item['movie_id']}_{global_idx}"):
+                            show_media_modal(item, prefix=f"person_{global_idx}")
 
 # --- Movie Franchises ---
 elif main_tab_choice == "🎞️ Movie Franchises":
@@ -1176,7 +1220,7 @@ elif main_tab_choice == "❤️ My Watchlist":
         status_filter = st.selectbox("Filter by status", statuses, key="watchlist_status_filter")
         watchlist_items = [normalize_watchlist_item(m) for m in st.session_state.watchlist]
         if status_filter != "All":
-            watchlist_items = [m for m in watchlist_items if m.get("status") == status_filter]
+            watchlist_items = [m for m in watchlist_items if m.get("status"] == status_filter]
         st.markdown(f"**{len(watchlist_items)}** items in view · **{len(st.session_state.watchlist)}** total saved")
         
         COLS_PER_ROW = 5
