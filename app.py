@@ -260,21 +260,6 @@ def search_media_tmdb(query, media_type="movie"):
     return []
 
 @st.cache_data(show_spinner=False, ttl=86400)
-def get_trending_media(media_type="movie"):
-    endpoint = "trending/movie/day" if media_type == "movie" else "trending/tv/day"
-    url = f"https://api.themoviedb.org/3/{endpoint}?api_key={API_KEY}"
-    try:
-        res = requests.get(url, timeout=5)
-        if res.status_code == 200:
-            results = res.json().get("results", [])
-            for r in results:
-                r["media_type"] = media_type
-            return results
-    except Exception:
-        st.toast(f"⚠️ Unable to fetch trending {media_type}s.", icon="⚠️")
-    return []
-
-@st.cache_data(show_spinner=False, ttl=86400)
 def search_collection_tmdb(query):
     url = f"https://api.themoviedb.org/3/search/collection?api_key={API_KEY}&query={query}&language=en-US"
     try:
@@ -569,16 +554,41 @@ def get_home_media(section, page=1):
     elif section == "Popular Anime":
         url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16&with_original_language=ja&sort_by=popularity.desc&page={page}&language=en-US"
         m_type = "tv"
+    elif section == "Top Rated Anime":
+        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16&with_original_language=ja&sort_by=vote_average.desc&vote_count.gte=50&page={page}&language=en-US"
+        m_type = "tv"
+    elif section == "Action Anime":
+        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16,10759&with_original_language=ja&sort_by=popularity.desc&page={page}&language=en-US"
+        m_type = "tv"
+    elif section == "Fantasy Anime":
+        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=16,10765&with_original_language=ja&sort_by=popularity.desc&page={page}&language=en-US"
+        m_type = "tv"
     elif section == "Top Rated Movies":
         url = f"https://api.themoviedb.org/3/movie/top_rated?api_key={API_KEY}&language=en-US&page={page}"
         m_type = "movie"
     elif section == "Top Rated TV":
         url = f"https://api.themoviedb.org/3/tv/top_rated?api_key={API_KEY}&language=en-US&page={page}"
         m_type = "tv"
+    elif section == "Action Movies":
+        url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres=28&sort_by=popularity.desc&page={page}&language=en-US"
+        m_type = "movie"
+    elif section == "Horror Movies":
+        url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres=27&sort_by=popularity.desc&page={page}&language=en-US"
+        m_type = "movie"
+    elif section == "Comedy Movies":
+        url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres=35&sort_by=popularity.desc&page={page}&language=en-US"
+        m_type = "movie"
+    elif section == "Action TV":
+        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=10759&sort_by=popularity.desc&page={page}&language=en-US"
+        m_type = "tv"
+    elif section == "Drama TV":
+        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=18&sort_by=popularity.desc&page={page}&language=en-US"
+        m_type = "tv"
+    elif section == "Comedy TV":
+        url = f"https://api.themoviedb.org/3/discover/tv?api_key={API_KEY}&with_genres=35&sort_by=popularity.desc&page={page}&language=en-US"
+        m_type = "tv"
     else:
-        genre_ids = {"Action": 28, "Horror": 27, "Animation": 16, "Drama": 18, "Comedy": 35, "Adventure": 12, "Thriller": 53}
-        genre_id = genre_ids.get(section, 28)
-        url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&with_genres={genre_id}&sort_by=popularity.desc&language=en-US&page={page}"
+        url = f"https://api.themoviedb.org/3/discover/movie?api_key={API_KEY}&sort_by=popularity.desc&language=en-US&page={page}"
         m_type = "movie"
     try:
         response = requests.get(url, timeout=8)
@@ -706,7 +716,7 @@ def show_media_modal(item, prefix="modal"):
         else:
             st.info("No trailer video available.")
 
-# Top navigation and account controls (Clean Search Bar & Layout)
+# Top navigation and account controls
 if "main_nav_tab" not in st.session_state:
     st.session_state.main_nav_tab = "🏠 Home"
 
@@ -720,7 +730,6 @@ menu_options = {
 if "top_menu_select" not in st.session_state:
     st.session_state.top_menu_select = next((k for k, v in menu_options.items() if v == st.session_state.main_nav_tab), "Home")
 
-# Clean expanded layout for top navigation bar
 nav_home, nav_watch, nav_menu, nav_account = st.columns([1.3, 1.1, 1.4, 1.3], vertical_alignment="center")
 with nav_home:
     if st.button("🎬 Media Hub", use_container_width=True, key="top_home"):
@@ -802,13 +811,13 @@ if st.session_state.main_nav_tab == "🍿 Discover & Recommendations":
     sort_option = st.sidebar.selectbox("Sort Recommendations By:", ["Popularity / Match", "Highest Rating", "Release Year (Newest)"], key="sort_option_select")
     selected_genre = st.sidebar.selectbox("Filter by Genre:", ALL_GENRES, key="genre_filter_select")
     if st.sidebar.button("Surprise Me! 🎲", use_container_width=True, key="surprise_btn"):
-        trending = get_trending_media("movie")
+        trending = get_home_media("Trending Movies")
         if trending:
             rand_item = random.choice(trending)
-            st.session_state.selected_movie_id = rand_item.get("id")
-            with st.spinner(f'Surprise! Selecting "{rand_item.get("title") or rand_item.get("name")}"...'):
-                st.session_state.selected_movie_info = get_media_details(rand_item.get("id"), "movie")
-                st.session_state.recommendations = get_recommendations_from_tmdb(rand_item.get("id"), selected_genre, "movie")
+            st.session_state.selected_movie_id = rand_item.get("movie_id")
+            with st.spinner(f'Surprise! Selecting "{rand_item.get("title")}"...'):
+                st.session_state.selected_movie_info = get_media_details(rand_item.get("movie_id"), "movie")
+                st.session_state.recommendations = get_recommendations_from_tmdb(rand_item.get("movie_id"), selected_genre, "movie")
             st.session_state.main_nav_tab = "🍿 Discover & Recommendations"
             st.rerun()
 elif st.session_state.main_nav_tab == "🎲 Mood Finder":
@@ -825,29 +834,38 @@ elif "watchlist" not in st.session_state:
     st.session_state.watchlist = [normalize_watchlist_item(m) for m in load_user_watchlist(watchlist_owner)] if is_logged_in else []
     st.session_state.watchlist_owner = watchlist_owner
 
-# --- HOME with Filter Option (All, Movies, Series, Anime) ---
+# --- HOME with Correct Specific Categories & Filters ---
 if main_tab_choice == "🏠 Home":
     st.title("🎬 Discover Movies, TV Shows & Anime")
     st.caption("Trending picks, top-rated movies, TV series, and anime — all in one unified hub.")
     
-    # Category filter pills/selectbox for Home
     home_filter = st.radio("Filter Home Categories:", ["All", "Movies", "TV Series", "Anime"], horizontal=True, key="home_category_filter")
     st.markdown("")
 
-    if home_filter in ["All", "Movies"]:
+    if home_filter == "All":
+        render_home_carousel("Trending Movies", "🔥 Trending Movies This Week", "home_trend_mov")
+        render_home_carousel("Trending TV Shows", "📺 Trending TV Shows This Week", "home_trend_tv")
+        render_home_carousel("Popular Anime", "🌸 Popular Anime Masterpieces", "home_anime")
+        render_home_carousel("Action Movies", "💥 Action Movies", "home_act_mov")
+        render_home_carousel("Horror Movies", "👻 Horror Movies", "home_hor_mov")
+        render_home_carousel("Comedy Movies", "😂 Comedy Movies", "home_com_mov")
+    elif home_filter == "Movies":
         render_home_carousel("Trending Movies", "🔥 Trending Movies This Week", "home_trend_mov")
         render_home_carousel("Top Rated Movies", "⭐ Top Rated Movies", "home_top_mov")
-    
-    if home_filter in ["All", "TV Series"]:
+        render_home_carousel("Action Movies", "💥 Action Movies", "home_act_mov")
+        render_home_carousel("Horror Movies", "👻 Horror Movies", "home_hor_mov")
+        render_home_carousel("Comedy Movies", "😂 Comedy Movies", "home_com_mov")
+    elif home_filter == "TV Series":
         render_home_carousel("Trending TV Shows", "📺 Trending TV Shows This Week", "home_trend_tv")
         render_home_carousel("Top Rated TV", "🌟 Top Rated TV Shows", "home_top_tv")
-        
-    if home_filter in ["All", "Anime"]:
+        render_home_carousel("Action TV", "⚔️ Action & Adventure TV", "home_act_tv")
+        render_home_carousel("Drama TV", "🎭 Drama Series", "home_drm_tv")
+        render_home_carousel("Comedy TV", "😄 Comedy Series", "home_com_tv")
+    elif home_filter == "Anime":
         render_home_carousel("Popular Anime", "🌸 Popular Anime Masterpieces", "home_anime")
-        
-    if home_filter == "All":
-        render_home_carousel("Action", "💥 Action & Adventure", "home_action")
-        render_home_carousel("Horror", "👻 Horror & Thriller", "home_horror")
+        render_home_carousel("Top Rated Anime", "⭐ Top Rated Anime", "home_top_anime")
+        render_home_carousel("Action Anime", "⚔️ Action & Shonen Anime", "home_act_anime")
+        render_home_carousel("Fantasy Anime", "✨ Fantasy & Sci-Fi Anime", "home_fan_anime")
 
 # --- Global Search ---
 elif main_tab_choice == "🔎 Media Search":
