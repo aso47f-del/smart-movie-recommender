@@ -1220,7 +1220,7 @@ elif main_tab_choice == "❤️ My Watchlist":
         status_filter = st.selectbox("Filter by status", statuses, key="watchlist_status_filter")
         watchlist_items = [normalize_watchlist_item(m) for m in st.session_state.watchlist]
         if status_filter != "All":
-            watchlist_items = [m for m in watchlist_items if m.get("status"] == status_filter]
+            watchlist_items = [m for m in watchlist_items if m.get("status") == status_filter]
         st.markdown(f"**{len(watchlist_items)}** items in view · **{len(st.session_state.watchlist)}** total saved")
         
         COLS_PER_ROW = 5
